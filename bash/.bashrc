@@ -116,6 +116,7 @@ alias brc.=". $HOME/.bashrc"
 alias cdcp="cd $HOME/Desktop/projects/cp/codeforces"
 alias cdp5="cd $HOME/Desktop/projects/andet/fun/p5"
 alias cdd="cd $HOME/Desktop"
+alias cd.="cd $HOME/.dotfiles"
 
 # clear
 alias cl="clear"
