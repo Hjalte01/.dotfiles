@@ -117,6 +117,16 @@ alias cdcp="cd $HOME/Desktop/projects/cp/codeforces"
 alias cdp5="cd $HOME/Desktop/projects/andet/fun/p5"
 alias cdd="cd $HOME/Desktop"
 alias cd.="cd $HOME/.dotfiles"
+alias cdpl="cd $HOME/.config/nvim/lua/plugins"
+
+# Fuzzy-find history and copy the selected command to the clipboard
+history() {
+  # This function avoids the complex quoting issues of an alias.
+  builtin history | fzf --bind 'enter:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | xclip -selection clipboard)+abort'
+}
+# chainging caps lock and esp (nvim prefix easier)
+# gsettings set org.gnome.desktop.input-sources xkb-options "['caps:swapescape']" # switched
+# gsettings reset org.gnome.desktop.input-sources xkb-options # default
 
 # clear
 alias cl="clear"
@@ -180,6 +190,35 @@ function ts_enable() {
   else
     echo "Touchscreen already enabled."
   fi
+}
+
+# Use default editor as nvim
+export EDITOR="nvim"
+export VISUAL="$EDITOR"
+
+# llm init spec prompt
+alias llmspec="cat $HOME/Desktop/llm_spec_prompt_init.txt | cc"
+
+# Stows all packages found in the dotfiles directory automatically.
+# Can also pass arguments through, e.g., `stowAll -R` to restow everything.
+stowAll() {
+  # Change to the dotfiles directory, remembering where we were.
+  pushd "$HOME/.dotfiles" >/dev/null
+
+  echo "Stowing all packages with arguments: $@"
+  # Loop through every item in the current directory.
+  for pkg in */; do
+    # Check if the item is a directory (and not a file).
+    if [ -d "${pkg}" ]; then
+      # The ${pkg%/} removes the trailing slash from the directory name.
+      echo "--> Stowing ${pkg%/}"
+      stow "$@" "${pkg%/}"
+    fi
+  done
+
+  # Return to the original directory.
+  popd >/dev/null
+  echo "All packages stowed."
 }
 
 # -------------------   Custome commands end  ----------------------------------

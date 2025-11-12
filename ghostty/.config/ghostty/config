@@ -1,16 +1,20 @@
 
 theme = TokyoNight Moon
 
-
 # Set your preferred font family (ensure you have one installed, like "JetBrainsMono Nerd Font")
 font-family = "Nerd Font"
 
 # Adjust font size (default is 12)
 font-size = 16
 
-
 # Add some space around the text area (top, right, bottom, left)
 window-padding-x = 4
 window-padding-y = 4
+
+# Hide the windoe-decoration bar(top bar)
+window-decoration = false
+
+gtk-tabs-location = hidden
+
 
 
