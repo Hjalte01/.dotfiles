@@ -1,21 +1,22 @@
+# Dynamic theme colors
+config-file = ?"~/.config/omarchy/current/theme/ghostty.conf"
 
-theme = TokyoNight Moon
-
-# Set your preferred font family (ensure you have one installed, like "JetBrainsMono Nerd Font")
-font-family = "Nerd Font"
-
-# Adjust font size (default is 12)
+# Font
+font-family = "JetBrainsMono Nerd Font"
+font-style = Regular
 font-size = 16
 
-# Add some space around the text area (top, right, bottom, left)
-window-padding-x = 4
-window-padding-y = 4
+# Window
+window-theme = ghostty
+window-padding-x = 14
+window-padding-y = 14
+confirm-close-surface=false
+resize-overlay = never
+gtk-toolbar-style = flat
 
-# Hide the windoe-decoration bar(top bar)
-window-decoration = false
+# Cursor styling
+cursor-style = "block"
+cursor-style-blink = false
 
-gtk-tabs-location = hidden
-
-# Bluring background-opacity
-# background-opacity = 0.97
-
+# Slowdown mouse scrolling
+mouse-scroll-multiplier = 0.95
