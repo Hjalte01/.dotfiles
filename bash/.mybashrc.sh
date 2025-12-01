@@ -60,6 +60,8 @@ alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"
 export EDITOR="nvim"
 export VISUAL="nvim"
 
+# Add HOME/.local/bin to PATH to place user scripts
+export PATH="$HOME/.local/bin:$PATH"
 # ==========================================
 # 5. FUNCTIONS
 # ==========================================
@@ -129,3 +131,17 @@ function ts_enable() {
         echo "Touchscreen already enabled."
     fi
 }
+
+
+# testt to see if ssh-agent and ssh-add is needed before adding
+# --- SSH AGENT AUTOSTART ---
+# if [ -z "$SSH_AUTH_SOCK" ]; then
+#    # Check for a currently running instance of the agent
+#    RUNNING_AGENT="`ps -ax | grep 'ssh-agent -s' | grep -v grep | wc -l | tr -d '[:space:]'`"
+#    if [ "$RUNNING_AGENT" = "0" ]; then
+#         # Launch a new instance of the agent
+#         ssh-agent -s &> .ssh-agent
+#    fi
+#    eval `cat .ssh-agent` > /dev/null
+#    ssh-add ~/.ssh/id_ed25519 2>/dev/null
+# fi
