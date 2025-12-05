@@ -132,6 +132,13 @@ function ts_enable() {
     fi
 }
 
+# Fuzzy-find history and copy the selected command to the clipboard
+history() {
+  # This function avoids the complex quoting issues of an alias.
+  builtin history | fzf --bind 'enter:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
+}
+
+
 
 # testt to see if ssh-agent and ssh-add is needed before adding
 # --- SSH AGENT AUTOSTART ---
