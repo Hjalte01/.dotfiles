@@ -2,8 +2,6 @@
 -- Default keymaps that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/keymaps.lua
 -- Add any additional keymaps here
 
--- Define the mapping using LazyVim's utility
-
 ----------------------------------------
 ---  run c++
 ----------------------------------------
@@ -88,5 +86,3 @@ if not exists then
 else
   print("Mapping <leader>ww already exists")
 end
-
---------- End of File ----------

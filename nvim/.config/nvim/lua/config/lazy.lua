@@ -5,7 +5,7 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
   if vim.v.shell_error ~= 0 then
     vim.api.nvim_echo({
       { "Failed to clone lazy.nvim:\n", "ErrorMsg" },
-      { out, "WarningMsg" },
+      { out,                            "WarningMsg" },
       { "\nPress any key to exit..." },
     }, true, {})
     vim.fn.getchar()
@@ -16,18 +16,19 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
   spec = {
-    -- 1. Must be first
-    { "LazyVim/LazyVim", import = "lazyvim.plugins" },
+    -- 1. add LazyVim and import its plugins -- need to be first
+    { "LazyVim/LazyVim",                                import = "lazyvim.plugins" },
 
-    -- 2. Import LazyVim extras (from lazyvim.json)
+    -- 2. Imports Lazyvim extras
     { import = "lazyvim.plugins.extras" },
 
-    -- Debugging enabled
+    -- Everything else from plugin files
+    { import = "lazyvim.plugins.extras.lang.json" },
+    { import = "lazyvim.plugins.extras.lang.typescript" },
     { import = "lazyvim.plugins.extras.dap.core" },
-    -- Java config
     { import = "lazyvim.plugins.extras.lang.java" },
 
-    -- 3. Import/override with your custom plugins (must be last)
+    -- 3. import/override with your plugins -- need to be last
     { import = "plugins" },
   },
   defaults = {
@@ -43,7 +44,7 @@ require("lazy").setup({
   checker = {
     enabled = true, -- check for plugin updates periodically
     notify = false, -- notify on update
-  }, -- automatically check for plugin updates
+  },                -- automatically check for plugin updates
   performance = {
     rtp = {
       -- disable some rtp plugins

@@ -23,6 +23,9 @@ alias la='ls -A'
 alias l='ls -CF'
 alias cl="clear"
 
+# Set bash editor to Vi
+set -o vi
+
 # ==========================================
 # 2. PROMPT (Green User / Blue Path)
 # ==========================================
@@ -60,11 +63,19 @@ alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"
 export EDITOR="nvim"
 export VISUAL="nvim"
 
+export MANPAGER='nvim +Man!'
+
 # Add HOME/.local/bin to PATH to place user scripts
 export PATH="$HOME/.local/bin:$PATH"
 # ==========================================
 # 5. FUNCTIONS
 # ==========================================
+
+# tldrf (tldr flags) e.g. ls -alF -> it will show line by line those flags
+tldrf () {
+  # curl the explanation API with your command
+  curl -Gs "https://www.mankier.com/api/explain/?cols=$(tput cols)" --data-urlencode "q=$*"
+}
 
 # Smart CD with Preview
 cdd() {
