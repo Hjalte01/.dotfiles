@@ -6,6 +6,7 @@ shopt -s histappend
 HISTSIZE=1000
 HISTFILESIZE=2000
 shopt -s checkwinsize
+export BROWSER=firefox
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
 # Enable colors
@@ -146,7 +147,7 @@ function ts_enable() {
 # Fuzzy-find history and copy the selected command to the clipboard
 history() {
   # This function avoids the complex quoting issues of an alias.
-  builtin history | fzf --bind 'enter:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
+  builtin history | tac | fzf --bind 'enter:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
 }
 
 
@@ -163,3 +164,14 @@ history() {
 #    eval `cat .ssh-agent` > /dev/null
 #    ssh-add ~/.ssh/id_ed25519 2>/dev/null
 # fi
+
+
+
+
+
+
+
+
+alias venvsip='source $HOME/Documents/sip/venv/bin/activate'
+alias venvno='source $HOME/Documents/no/venv/bin/activate'
+

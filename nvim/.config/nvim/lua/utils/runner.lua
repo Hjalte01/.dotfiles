@@ -22,10 +22,27 @@ function M.run_cpp_file()
     -- Use the new required snacks.terminal function
     require("snacks.terminal")(compile_and_run, {
       cwd = vim.fn.getcwd(), -- Correctly set the Working Directory
-      persist = true, -- Keep the terminal open
+      persist = true,        -- Keep the terminal open
     })
   else
     vim.notify("This command is only for C++ files!", vim.log.levels.WARN)
+  end
+end
+
+function M.run_python_file()
+  local filetype = vim.bo.filetype
+  if filetype == "python" then
+    local filename = vim.fn.expand("%")
+    -- We use 'python3 -u' (unbuffered) so print statements show up immediately
+    local cmd = string.format("python3 -u %s; echo ''; read -p 'Press Enter to exit...' ", filename)
+
+    require("snacks.terminal")(cmd, {
+      cwd = vim.fn.getcwd(),
+      persist = true,
+      win = { position = "float" }, -- Optional: makes it float like your Java setup
+    })
+  else
+    vim.notify("This command is only for Python files!", vim.log.levels.WARN)
   end
 end
 
