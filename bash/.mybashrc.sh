@@ -175,3 +175,15 @@ history() {
 alias venvsip='source $HOME/Documents/sip/venv/bin/activate'
 alias venvno='source $HOME/Documents/no/venv/bin/activate'
 
+
+function auto_sip() {
+  cd "$HOME/Documents/sip/assignment_7/"
+  venvsip
+  nvim task
+}
+
+function tf_sip() {
+  cd "$HOME/Documents/sip/assignment_8/task/"
+  source ../tf/venv/bin/activate
+  nvim .
+}
