@@ -14,8 +14,8 @@
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs: {
     nixosConfigurations = {
-      # REPLACE "myhostname" with your actual PC's hostname!
-      myhostname = nixpkgs.lib.nixosSystem {
+      
+      nixos = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           ./nixos/hardware-configuration.nix
@@ -27,7 +27,7 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             # REPLACE "yourusername" with your actual linux username!
-            home-manager.users.yourusername = import ./home-manager/home.nix;
+            home-manager.users.hjalte = import ./home-manager/home.nix;
           }
         ];
       };

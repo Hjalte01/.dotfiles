@@ -187,3 +187,5 @@ function tf_sip() {
   source ../tf/venv/bin/activate
   nvim .
 }
+
+

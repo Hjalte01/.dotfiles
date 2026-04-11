@@ -9,6 +9,7 @@
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
     ];
+  # Add nixos flakes for reproducibility
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   # Bootloader.
