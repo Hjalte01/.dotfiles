@@ -119,7 +119,7 @@
   ];
 
 
-  # ==========================================
+# ==========================================
   # KEYBOARD REMAPPING (keyd)
   # ==========================================
   services.keyd = {
@@ -128,6 +128,7 @@
       default = {
         ids = [ "05ac:024f" "*HAILUCK*" ];
         settings = {
+          # Default state (Windows Mode)
           main = {
             rightmeta = "rightalt";
             brightnessdown = "mute";
@@ -138,11 +139,30 @@
             kbdillumup = "brightnessup";
             previoussong = "playpause";
           };
+          
+          # This layer activates automatically when Ctrl + Shift are held
+          "control+shift" = {
+            # Pressing backspace while in this layer toggles the mac mode!
+            backspace = "toggle(mac_mode)";
+          };
+          
+          # Hidden state (Mac Mode - activates when toggled)
+          mac_mode = {
+            leftalt = "leftmeta";
+            leftmeta = "leftalt";
+            rightalt = "rightcontrol";
+            rightmeta = "rightalt";
+            grave = "102nd";
+            "102nd" = "grave";
+          };
         };
       };
     };
   };
-    
+
+
+
+
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;

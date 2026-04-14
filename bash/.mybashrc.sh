@@ -189,3 +189,21 @@ alias sharecode="npx repomix --copy && rm repomix-output.* 2>/dev/null"
 
 # Only copies the visual folder tree to your clipboard (requires 'tree' package)
 alias sharetree="tree -a -I '.git|.nix-profile' | wl-copy"
+
+# ca (Copy Append): Adds piped text to the END of your current clipboard
+ca() {
+  local new_text=$(cat)
+  local current_clip=$(wl-paste 2>/dev/null)
+  # Combine old + new with a newline in between
+  echo -e "$current_clip\n$new_text" | wl-copy
+  echo "✔ Appended to clipboard!"
+}
+
+# ac (Append Copy / Prepend): Adds piped text to the START of your clipboard
+ac() {
+  local new_text=$(cat)
+  local current_clip=$(wl-paste 2>/dev/null)
+  # Combine new + old with a newline in between
+  echo -e "$new_text\n$current_clip" | wl-copy
+  echo "✔ Prepended to clipboard!"
+}
