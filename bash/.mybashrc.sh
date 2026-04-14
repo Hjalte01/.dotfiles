@@ -53,9 +53,12 @@ for i in $(seq 1 10); do
 done
 
 # Config & Project Shortcuts
-alias brc="nvim $HOME/.mybashrc.sh"
+alias brc="nvim $HOME/.dotfiles/bash/.mybashrc.sh"
 alias brc.=". $HOME/.bashrc"
 alias cd.="cd $HOME/.dotfiles"
+alias hypr="nvim $HOME/.dotfiles/hypr/hyprland.conf"
+alias home="nvim $HOME/.dotfiles/home-manager/home.nix"
+alias conf="nvim $HOME/.dotfiles/nixos/configuration.nix"
 
 # Wifi Toggle
 alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"
@@ -182,7 +185,7 @@ function tf_sip() {
 alias nxb="sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos"
 
 # Packs your whole project and copies it directly to your clipboard
-alias sharecode="npx repomix --copy"
+alias sharecode="npx repomix --copy && rm repomix-output.* 2>/dev/null"
 
 # Only copies the visual folder tree to your clipboard (requires 'tree' package)
 alias sharetree="tree -a -I '.git|.nix-profile' | wl-copy"

@@ -48,6 +48,8 @@ ghostty/
       config
 home-manager/
   home.nix
+hypr/
+  hyprland.conf
 nixos/
   configuration.nix
   hardware-configuration.nix
@@ -113,6 +115,238 @@ README.md
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="hypr/hyprland.conf">
+# Hyprland configuration overrides
+# Add your custom settings here
+
+$laptop_scale = 1.25
+
+# testing purposes set to true(default) 
+# debug:disable_logs = false 
+
+
+# Example overrides:
+# ------------------------------------------------------
+# Monitor (Monitor on the left)
+# ------------------------------------------------------
+monitor = eDP-1, preferred, auto, $laptop_scale
+monitor = HDMI-A-1, preferred, auto-left, 1
+monitor = DP-1, preferred, auto-left, 1
+monitor = DP-2, preferred, auto-left, 1
+
+# trigger when the switch is turning on
+bindl = , switch:on:Lid Switch, exec, hyprctl keyword monitor "eDP-1, disable"
+# trigger when the switch is turning off
+bindl = , switch:off:Lid Switch, exec, hyprctl keyword monitor "eDP-1, preferred, auto, $laptop_scale"
+
+# This is we want to forefully kill 
+unbind = SUPER SHIFT, D
+unbind = SUPER SHIFT CTRL, D
+bind = SUPER SHIFT, D, exec, hyprctl keyword monitor "eDP-1, preferred, auto, 1.25"
+bind = SUPER SHIFT CTRL, D, exec, hyprctl keyword monitor "eDP-1, disable"
+
+
+
+
+# ------------------------------------------------------
+# Input (caps=escape, natural_scroll, smooth movement)
+# ------------------------------------------------------
+input {
+  kb_layout = dk
+  kb_variant = nodeadkeys
+
+  kb_options = caps:escape
+  accel_profile = flat
+
+  # Change speed of keyboard repeat
+  repeat_rate = 50
+  repeat_delay = 220
+
+  touchpad {
+    # Use natural (inverse) scrolling
+    natural_scroll = true
+
+    # Control the speed of your scrolling
+    scroll_factor = 2
+  }
+}
+
+
+# Disable my touch-screen have had problems with auto paste/click and deleting of window bcs of it
+device {
+    name = wacom-hid-5367-finger
+    enabled = false
+}
+device {
+    name = wacom-hid-5367-pen
+    enabled = false
+}
+# device {
+#     name = elan06fa:00-04f3:3293-touchpad
+#     enabled = false
+# }
+cursor {
+    no_hardware_cursors = true
+}
+
+# ------------------------------------------------------
+# Styling of apps
+# ------------------------------------------------------
+decoration {
+  rounding = 10
+}
+
+# Swtich between mac and window keyboard setting
+bind = SUPER SHIFT CTRL, T, exec, ~/omarchy-supplement/bin/toggle-kb-mode.sh
+
+
+
+# ------------------------------------------------------
+# Change my 2.keyboard Alt-keys to nothing 
+# ------------------------------------------------------
+# Respectivelu: copy, paste, cut, undo, select all 
+bind = ALT, c, exec, true
+bind = ALT, v, exec, true
+bind = ALT, x, exec, true
+bind = ALT, z, exec, true
+bind = ALT, a, exec, true 
+
+
+
+
+# ------------------------------------------------------
+# Shortcuts to my used web apps
+# ------------------------------------------------------
+unbind = SUPER SHIFT, A
+unbind = SUPER SHIFT CTRL, A
+bindd = SUPER SHIFT, A, Gemini, exec, /home/hjalte/.local/bin/omarchy-launch-webapp "https://gemini.google.com/"
+bindd = SUPER SHIFT CTRL, A, Gemini Code, exec, /home/hjalte/.local/bin/omarchy-launch-webapp "https://aistudio.google.com"
+
+
+unbind = SUPER SHIFT, B 
+bindd = SUPER SHIFT, B, Firefox, exec, /home/hjalte/.local/bin/omarchy-launch-webapp "https://google.com"
+
+unbind = SUPER SHIFT, K
+unbind = SUPER SHIFT CTRL, K
+bindd = SUPER SHIFT, K, Absalon, exec, /home/hjalte/.local/bin/omarchy-launch-webapp  "https://absalon.ku.dk/"
+bindd = SUPER SHIFT CTRL, K, KU, exec, /home/hjalte/.local/bin/omarchy-launch-webapp  "https://kunet.ku.dk/"
+
+unbind = SUPER SHIFT, E
+unbind = SUPER SHIFT CTRL, E
+bindd = SUPER SHIFT, E, Email, exec, /home/hjalte/.local/bin/omarchy-launch-webapp  "https://webmail.simply.com"
+bindd = SUPER SHIFT CTRL, E, KU Email, exec, /home/hjalte/.local/bin/omarchy-launch-webapp "https://webmail.ku.dk"
+
+unbind = SUPER SHIFT, Y
+bindd = SUPER SHIFT, Y, YouTube, exec, /home/hjalte/.local/bin/omarchy-launch-webapp "https://youtube.com/"
+
+unbind = SUPER, B 
+bind = SUPER, B, exec, omarchy-launch-bluetooth
+
+unbind = CTRL ALT, MINUS
+bind = CTRL ALT, MINUS, exec, ~/omarchy-supplement/bin/auto_clicker_toggle.sh 0.1
+
+unbind = SHIFT CTRL ALT, MINUS
+bind = SHIFT CTRL ALT, MINUS, exec, ~/omarchy-supplement/bin/auto_clicker_toggle.sh ask
+
+
+
+# ------------------------------------------------------
+# Shortcuts to my used apps
+bindd = SUPER, RETURN, Terminal, exec, uwsm-app -- xdg-terminal-exec --dir="$(omarchy-cmd-terminal-cwd)"
+
+unbind = SUPER SHIFT, F 
+bindd = SUPER SHIFT, F, File manager, exec, uwsm-app -- nautilus --new-window
+
+unbind = SUPER SHIFT, M
+bindd = SUPER SHIFT, M, Music, exec, omarchy-launch-or-focus spotify
+
+unbind = SUPER SHIFT, N
+bindd = SUPER SHIFT, N, Editor, exec, omarchy-launch-editor
+
+unbind = SUPER SHIFT, T
+bindd = SUPER SHIFT, T, Activity, exec, omarchy-launch-tui btop
+
+unbind = SUPER SHIFT, D
+bindd = SUPER SHIFT, D, Discord, exec, /home/hjalte/.local/bin/omarchy-launch-webapp https://discord.com/channels/@me
+
+unbind = SUPER SHIFT CTRL, D
+bindd = SUPER SHIFT CTRL, D, Docker, exec, omarchy-launch-tui lazydocker
+
+
+
+
+
+# ------------------------------------------------------
+# Move SUPER everywhere
+# ------------------------------------------------------
+# unbind SUPER (hjkl)
+unbind = SUPER, h
+unbind = SUPER, j
+unbind = SUPER, J
+unbind = SUPER, k
+unbind = SUPER, K
+unbind = SUPER, l
+
+# Move focus with SUPER + hjkl
+bind = SUPER, h, movefocus, l
+bind = SUPER, l, movefocus, r
+bind = SUPER, k, movefocus, u
+bind = SUPER, j, movefocus, d
+
+
+
+
+# ------------------------------------------------------
+# Change default keybinds
+# ------------------------------------------------------
+# Workspace (Workspac 0..9 => 1..10)
+unbind = SUPER, 0
+bind = SUPER, 0, workspace, 10
+
+# Reserve Workspace 1 for the external monitor
+workspace = 1, monitor:HDMI-A-1, default:true
+workspace = 2, monitor:eDP-1, default:true
+
+
+# Move "Toggle Split" (Vertical/Horizontal) to N
+unbind = SUPER, n
+bind = SUPER, n, togglesplit
+
+# Move "Show Keybinds" (Omarchy Help) to M
+# (This command assumes standard Omarchy help script. If it doesn't work, check /home/hjalte/.config/hypr/bindings.conf)
+unbind = SUPER, m
+bind = SUPER, m, exec, omarchy-menu-keybindings
+
+
+
+
+# ------------------------------------------------------
+# (Add any other custom keybinds here or add as a group)
+# ------------------------------------------------------
+
+
+exec-once = /usr/local/bin/kill-wacom.sh
+
+
+
+# ------------------------------------------------------
+# Opacity Master Toggle 
+# ------------------------------------------------------
+
+# Kill any default Omarchy float binds for the letter O
+unbind = SUPER, o
+unbind = SUPER, O
+
+# One key to toggle between Solid and Ghost mode
+bind = SUPER, o, exec, bash /home/hjalte/omarchy-supplement/bin/window_opacity.sh
+
+bind = SUPER ALT, B, exec, hyprctl dispatch togglefloating && hyprctl dispatch pin && hyprctl dispatch resizeactive exact 100% 100% && hyprctl dispatch moveactive exact 0 0
+
+unbind = SUPER CTRL, T 
+unbind = SUPER CTRL, t
+bind = SUPER CTRL, T, exec, wlr-randr --output eDP-1 --toggle
+</file>
 
 <file path="nixos/hardware-configuration.nix">
 # Do not modify this file!  It was generated by ‘nixos-generate-config’
@@ -1240,81 +1474,6 @@ fi
 Dotfiles to save/share the config files
 </file>
 
-<file path="home-manager/home.nix">
-{ config, pkgs, ... }:
-
-{
-  home.username = "hjalte"; 
-  home.homeDirectory = "/home/hjalte"; 
-
-  # Packages you want installed just for your user
-  home.packages = with pkgs; [
-    neovim
-    git
-    ripgrep      # LazyVim needs this
-    fd           # LazyVim needs this
-    gcc          # Needed for Treesitter
-    wl-clipboard # Clipboard support
-
-    ghostty      # Terminal
-    tree-sitter  # Nvim needs it
-    nodejs_22    # required by mason
-    unzip        # required by mason
-    curl
-    wget
-
-    waybar       
-    rofi
-    swww
-
-
-  ];
-
-  # ==========================================
-  # SYMLINKING DOTFILES
-  # Notice the ../ to go up one directory!
-  # ==========================================
-  home.file = {
-    # 1. Neovim
-    ".config/nvim" = {
-      source = ../nvim/.config/nvim;
-      recursive = true;
-    };
-
-    # 2. Waybar
-    ".config/waybar" = {
-      source = ../waybar/.config/waybar;
-      recursive = true;
-    };
-
-    # 3. Tmux
-    ".tmux.conf".source = ../tmux/.tmux.conf;
-
-    # 4. Bash
-    ".mybashrc.sh".source = ../bash/.mybashrc.sh;
-  };
-
-  # ==========================================
-  # NATIVE BASH CONFIGURATION
-  # ==========================================
-  programs.bash = {
-    enable = true;
-    initExtra = ''
-      # Load custom Omarchy configuration
-      if [ -f ~/.mybashrc.sh ]; then
-        source ~/.mybashrc.sh
-      fi
-    '';
-  };
-
-  # Let Home Manager install and manage itself.
-  programs.home-manager.enable = true;
-
-  # Don't change this without reading the Home Manager release notes!
-  home.stateVersion = "23.11"; 
-}
-</file>
-
 <file path="nvim/.config/nvim/after/ftplugin/java.lua">
 -- nvim/after/ftplugin/java.lua
 
@@ -1646,154 +1805,79 @@ int main() {{
 }
 </file>
 
-<file path="nixos/configuration.nix">
-# Edit this configuration file to define what should be installed on
-# your system.  Help is available in the configuration.nix(5) man page
-# and in the NixOS manual (accessible by running ‘nixos-help’).
-
+<file path="home-manager/home.nix">
 { config, pkgs, ... }:
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-    ];
-  # Add nixos flakes for reproducibility
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  home.username = "hjalte"; 
+  home.homeDirectory = "/home/hjalte"; 
 
-  # No SUDO password
-  security.sudo.wheelNeedsPassword = false;
-
-  # Fonts
-  fonts.packages = with pkgs; [
-    nerd-fonts.jetbrains-mono
-  ];
-
-  # Bootloader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-
-  networking.hostName = "nixos"; # Define your hostname.
-  # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
-
-  # Configure network proxy if necessary
-  # networking.proxy.default = "http://user:password@proxy:port/";
-  # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
-
-  # Enable networking
-  networking.networkmanager.enable = true;
-
-  # Set your time zone.
-  time.timeZone = "Europe/Copenhagen";
-
-  # Select internationalisation properties.
-  i18n.defaultLocale = "en_DK.UTF-8";
-
-  i18n.extraLocaleSettings = {
-    LC_ADDRESS = "da_DK.UTF-8";
-    LC_IDENTIFICATION = "da_DK.UTF-8";
-    LC_MEASUREMENT = "da_DK.UTF-8";
-    LC_MONETARY = "da_DK.UTF-8";
-    LC_NAME = "da_DK.UTF-8";
-    LC_NUMERIC = "da_DK.UTF-8";
-    LC_PAPER = "da_DK.UTF-8";
-    LC_TELEPHONE = "da_DK.UTF-8";
-    LC_TIME = "da_DK.UTF-8";
-  };
-
-  # Enable the X11 windowing system.
-  services.xserver.enable = true;
-
-
-  # Enable Hyprland Desktop Environment
-  programs.hyprland.enable = true;
-  
-  # Enable the GNOME Desktop Environment.
-  services.displayManager.gdm.enable = true;
-  services.desktopManager.gnome.enable = true;
-
-  # Configure keymap in X11
-  services.xserver.xkb = {
-    layout = "dk";
-    variant = "nodeadkeys";
-  };
-
-  # Configure console keymap
-  console.keyMap = "dk-latin1";
-
-  # Enable CUPS to print documents.
-  services.printing.enable = true;
-
-  # Enable sound with pipewire.
-  services.pulseaudio.enable = false;
-  security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    #jack.enable = true;
-
-    # use the example session manager (no others are packaged yet so this is enabled by default,
-    # no need to redefine it in your config for now)
-    #media-session.enable = true;
-  };
-
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.xserver.libinput.enable = true;
-
-  # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.hjalte = {
-    isNormalUser = true;
-    description = "Hjalte";
-    extraGroups = [ "networkmanager" "wheel" ];
-    packages = with pkgs; [
-    #  thunderbird
-    ];
-  };
-
-  # Install firefox.
-  programs.firefox.enable = true;
-
-  # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
-
-  # List packages installed in system profile. To search, run:
-  # $ nix search wget
-  environment.systemPackages = with pkgs; [
-  #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-  #  wget
+  # Packages you want installed just for your user
+  home.packages = with pkgs; [
+    neovim
     git
+    ripgrep      # LazyVim needs this
+    fd           # LazyVim needs this
+    gcc          # Needed for Treesitter
+    wl-clipboard # Clipboard support
+
+    ghostty      # Terminal
+    tree-sitter  # Nvim needs it
+    nodejs_22    # required by mason
+    unzip        # required by mason
+    curl
+    wget
+    tree
+
+    waybar       
+    rofi
   ];
-    
-  # Some programs need SUID wrappers, can be configured further or are
-  # started in user sessions.
-  # programs.mtr.enable = true;
-  # programs.gnupg.agent = {
-  #   enable = true;
-  #   enableSSHSupport = true;
-  # };
 
-  # List services that you want to enable:
+  # ==========================================
+  # SYMLINKING DOTFILES
+  # Notice the ../ to go up one directory!
+  # ==========================================
+  home.file = {
+    # 1. Neovim
+    ".config/nvim" = {
+      source = ../nvim/.config/nvim;
+      recursive = true;
+    };
 
-  # Enable the OpenSSH daemon.
-  # services.openssh.enable = true;
+    # 2. Waybar
+    ".config/waybar" = {
+      source = ../waybar/.config/waybar;
+      recursive = true;
+    };
 
-  # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-  # Or disable the firewall altogether.
-  # networking.firewall.enable = false;
+    # 3. Tmux
+    ".tmux.conf".source = ../tmux/.tmux.conf;
 
-  # This value determines the NixOS release from which the default
-  # settings for stateful data, like file locations and database versions
-  # on your system were taken. It‘s perfectly fine and recommended to leave
-  # this value at the release version of the first install of this system.
-  # Before changing this value read the documentation for this option
-  # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
-  system.stateVersion = "25.11"; # Did you read the comment?
+    # 4. Bash
+    ".mybashrc.sh".source = ../bash/.mybashrc.sh;
 
+    # 5. hyprland
+    ".config/hypr/hyprland.conf".source = ../hypr/hyprland.conf;
+  };
+
+  # ==========================================
+  # NATIVE BASH CONFIGURATION
+  # ==========================================
+  programs.bash = {
+    enable = true;
+    initExtra = ''
+      # Load custom Omarchy configuration
+      if [ -f ~/.mybashrc.sh ]; then
+        source ~/.mybashrc.sh
+      fi
+    '';
+  };
+
+  # Let Home Manager install and manage itself.
+  programs.home-manager.enable = true;
+
+  # Don't change this without reading the Home Manager release notes!
+  home.stateVersion = "23.11"; 
 }
 </file>
 
@@ -2027,6 +2111,182 @@ require("config.lazy")
     "NEWS.md": "10960"
   },
   "version": 8
+}
+</file>
+
+<file path="nixos/configuration.nix">
+# Edit this configuration file to define what should be installed on
+# your system.  Help is available in the configuration.nix(5) man page
+# and in the NixOS manual (accessible by running ‘nixos-help’).
+
+{ config, pkgs, ... }:
+
+{
+  imports =
+    [ # Include the results of the hardware scan.
+      ./hardware-configuration.nix
+    ];
+  # Add nixos flakes for reproducibility
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+  # No SUDO password
+  security.sudo.wheelNeedsPassword = false;
+
+  # Fonts
+  fonts.packages = with pkgs; [
+    nerd-fonts.jetbrains-mono
+  ];
+
+  # Bootloader.
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+
+  networking.hostName = "nixos"; # Define your hostname.
+  # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
+
+  # Configure network proxy if necessary
+  # networking.proxy.default = "http://user:password@proxy:port/";
+  # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
+
+  # Enable networking
+  networking.networkmanager.enable = true;
+
+  # Set your time zone.
+  time.timeZone = "Europe/Copenhagen";
+
+  # Select internationalisation properties.
+  i18n.defaultLocale = "en_DK.UTF-8";
+
+  i18n.extraLocaleSettings = {
+    LC_ADDRESS = "da_DK.UTF-8";
+    LC_IDENTIFICATION = "da_DK.UTF-8";
+    LC_MEASUREMENT = "da_DK.UTF-8";
+    LC_MONETARY = "da_DK.UTF-8";
+    LC_NAME = "da_DK.UTF-8";
+    LC_NUMERIC = "da_DK.UTF-8";
+    LC_PAPER = "da_DK.UTF-8";
+    LC_TELEPHONE = "da_DK.UTF-8";
+    LC_TIME = "da_DK.UTF-8";
+  };
+
+  # Enable the X11 windowing system.
+  services.xserver.enable = true;
+
+
+  # Enable Hyprland Desktop Environment
+  programs.hyprland.enable = true;
+  
+  # Enable the GNOME Desktop Environment.
+  services.displayManager.gdm.enable = true;
+  services.desktopManager.gnome.enable = true;
+
+  # Configure keymap in X11
+  services.xserver.xkb = {
+    layout = "dk";
+    variant = "nodeadkeys";
+  };
+
+  # Configure console keymap
+  console.keyMap = "dk-latin1";
+
+  # Enable CUPS to print documents.
+  services.printing.enable = true;
+
+  # Enable sound with pipewire.
+  services.pulseaudio.enable = false;
+  security.rtkit.enable = true;
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true;
+    pulse.enable = true;
+    # If you want to use JACK applications, uncomment this
+    #jack.enable = true;
+
+    # use the example session manager (no others are packaged yet so this is enabled by default,
+    # no need to redefine it in your config for now)
+    #media-session.enable = true;
+  };
+
+  # Enable touchpad support (enabled default in most desktopManager).
+  # services.xserver.libinput.enable = true;
+
+  # Define a user account. Don't forget to set a password with ‘passwd’.
+  users.users.hjalte = {
+    isNormalUser = true;
+    description = "Hjalte";
+    extraGroups = [ "networkmanager" "wheel" ];
+    packages = with pkgs; [
+    #  thunderbird
+    ];
+  };
+
+  # Install firefox.
+  programs.firefox.enable = true;
+
+  # Allow unfree packages
+  nixpkgs.config.allowUnfree = true;
+
+  # List packages installed in system profile. To search, run:
+  # $ nix search wget
+  environment.systemPackages = with pkgs; [
+  #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
+  #  wget
+    git
+  ];
+
+
+  # ==========================================
+  # KEYBOARD REMAPPING (keyd)
+  # ==========================================
+  services.keyd = {
+    enable = true;
+    keyboards = {
+      default = {
+        ids = [ "05ac:024f" "*HAILUCK*" ];
+        settings = {
+          main = {
+            rightmeta = "rightalt";
+            brightnessdown = "mute";
+            brightnessup = "volumedown";
+            scale = "volumeup";
+            dashboard = "micmute";
+            kbdillumdown = "brightnessdown";
+            kbdillumup = "brightnessup";
+            previoussong = "playpause";
+          };
+        };
+      };
+    };
+  };
+    
+  # Some programs need SUID wrappers, can be configured further or are
+  # started in user sessions.
+  # programs.mtr.enable = true;
+  # programs.gnupg.agent = {
+  #   enable = true;
+  #   enableSSHSupport = true;
+  # };
+
+  # List services that you want to enable:
+
+  # Enable the OpenSSH daemon.
+  # services.openssh.enable = true;
+
+  # Open ports in the firewall.
+  # networking.firewall.allowedTCPPorts = [ ... ];
+  # networking.firewall.allowedUDPPorts = [ ... ];
+  # Or disable the firewall altogether.
+  # networking.firewall.enable = false;
+
+  # This value determines the NixOS release from which the default
+  # settings for stateful data, like file locations and database versions
+  # on your system were taken. It‘s perfectly fine and recommended to leave
+  # this value at the release version of the first install of this system.
+  # Before changing this value read the documentation for this option
+  # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
+  system.stateVersion = "25.11"; # Did you read the comment?
+
 }
 </file>
 
@@ -2463,7 +2723,7 @@ function tf_sip() {
 alias nxb="sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos"
 
 # Packs your whole project and copies it directly to your clipboard
-alias sharecode="npx repomix --copy"
+alias sharecode="npx repomix --copy && rm repomix-output.* 2>/dev/null"
 
 # Only copies the visual folder tree to your clipboard (requires 'tree' package)
 alias sharetree="tree -a -I '.git|.nix-profile' | wl-copy"
