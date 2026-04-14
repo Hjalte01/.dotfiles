@@ -55,9 +55,13 @@
   # Enable the X11 windowing system.
   services.xserver.enable = true;
 
+
+  # Enable Hyprland Desktop Environment
+  programs.hyprland.enable = true;
+  
   # Enable the GNOME Desktop Environment.
-  services.xserver.displayManager.gdm.enable = true;
-  services.xserver.desktopManager.gnome.enable = true;
+  services.displayManager.gdm.enable = true;
+  services.desktopManager.gnome.enable = true;
 
   # Configure keymap in X11
   services.xserver.xkb = {
@@ -114,6 +118,31 @@
     git
   ];
 
+
+  # ==========================================
+  # KEYBOARD REMAPPING (keyd)
+  # ==========================================
+  services.keyd = {
+    enable = true;
+    keyboards = {
+      default = {
+        ids = [ "05ac:024f" "*HAILUCK*" ];
+        settings = {
+          main = {
+            rightmeta = "rightalt";
+            brightnessdown = "mute";
+            brightnessup = "volumedown";
+            scale = "volumeup";
+            dashboard = "micmute";
+            kbdillumdown = "brightnessdown";
+            kbdillumup = "brightnessup";
+            previoussong = "playpause";
+          };
+        };
+      };
+    };
+  };
+    
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   # programs.mtr.enable = true;

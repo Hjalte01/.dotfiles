@@ -180,3 +180,9 @@ function tf_sip() {
 
 # Rebuild nixos flake build
 alias nxb="sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos"
+
+# Packs your whole project and copies it directly to your clipboard
+alias sharecode="npx repomix --copy"
+
+# Only copies the visual folder tree to your clipboard (requires 'tree' package)
+alias sharetree="tree -a -I '.git|.nix-profile' | wl-copy"

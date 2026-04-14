@@ -19,6 +19,10 @@
     unzip        # required by mason
     curl
     wget
+    tree
+
+    waybar       
+    rofi
   ];
 
   # ==========================================
@@ -43,6 +47,9 @@
 
     # 4. Bash
     ".mybashrc.sh".source = ../bash/.mybashrc.sh;
+
+    # 5. hyprland
+    ".config/hypr/hyprland.conf".source = ../hypr/hyprland.conf;
   };
 
   # ==========================================
