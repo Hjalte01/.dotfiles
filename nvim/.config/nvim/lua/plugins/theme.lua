@@ -1,1 +1,0 @@
-/home/hjalte/.config/omarchy/current/theme/neovim.lua

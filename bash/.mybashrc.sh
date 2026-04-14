@@ -11,11 +11,11 @@ export BROWSER=firefox
 
 # Enable colors
 if [ -x /usr/bin/dircolors ]; then
-    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
-    alias ls='ls --color=auto'
-    alias grep='grep --color=auto'
-    alias fgrep='fgrep --color=auto'
-    alias egrep='egrep --color=auto'
+  test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+  alias ls='ls --color=auto'
+  alias grep='grep --color=auto'
+  alias fgrep='fgrep --color=auto'
+  alias egrep='egrep --color=auto'
 fi
 
 # Standard ls aliases
@@ -47,9 +47,9 @@ alias python='python3'
 alias_str=".."
 cmd_str="cd .."
 for i in $(seq 1 10); do
-    alias ${alias_str}="$cmd_str"
-    alias_str="$alias_str."
-    cmd_str="$cmd_str/.."
+  alias ${alias_str}="$cmd_str"
+  alias_str="$alias_str."
+  cmd_str="$cmd_str/.."
 done
 
 # Config & Project Shortcuts
@@ -73,51 +73,51 @@ export PATH="$HOME/.local/bin:$PATH"
 # ==========================================
 
 # tldrf (tldr flags) e.g. ls -alF -> it will show line by line those flags
-tldrf () {
+tldrf() {
   # curl the explanation API with your command
   curl -Gs "https://www.mankier.com/api/explain/?cols=$(tput cols)" --data-urlencode "q=$*"
 }
 
 # Smart CD with Preview
 cdd() {
-    local dir
-    local find_cmd="find . -maxdepth 4 -type d -not -path '*/.*'"
-    
-    # Check for fd (Arch) or fdfind (Debian)
-    if command -v fd &> /dev/null; then 
-        find_cmd="fd . $HOME --type d --hidden --exclude .git" 
-    elif command -v fdfind &> /dev/null; then 
-        find_cmd="fdfind . $HOME --type d --hidden --exclude .git" 
-    fi
+  local dir
+  local find_cmd="find . -maxdepth 4 -type d -not -path '*/.*'"
 
-    dir=$(eval "$find_cmd" | fzf --preview 'eza --tree --level=1 --color=always {}' --preview-window=right:50%)
+  # Check for fd (Arch) or fdfind (Debian)
+  if command -v fd &>/dev/null; then
+    find_cmd="fd . $HOME --type d --hidden --exclude .git"
+  elif command -v fdfind &>/dev/null; then
+    find_cmd="fdfind . $HOME --type d --hidden --exclude .git"
+  fi
 
-    if [[ -n "$dir" ]]; then
-        cd "$dir"
-    fi
+  dir=$(eval "$find_cmd" | fzf --preview 'eza --tree --level=1 --color=always {}' --preview-window=right:50%)
+
+  if [[ -n "$dir" ]]; then
+    cd "$dir"
+  fi
 }
 
 # The Magic Install Function
 function yaya() {
-    local INSTALL_SCRIPT="$HOME/omarchy-supplement/install-all.sh" 
-    local MARKER="# INSERT_HERE"
-    
-    for PACKAGE in "$@"; do
-        echo "---------------------------------"
-        echo "Attempting to install: $PACKAGE"
-        yay -S "$PACKAGE"
-        
-        if pacman -Qi "$PACKAGE" &> /dev/null; then
-            if grep -q "\"$PACKAGE\"" "$INSTALL_SCRIPT"; then
-                echo "✅ Installed, but '$PACKAGE' is already in your install list."
-            else
-                sed -i "/$MARKER/i \    \"$PACKAGE\"" "$INSTALL_SCRIPT"
-                echo "🎉 Success! Added '$PACKAGE' to your automation script."
-            fi
-        else
-            echo "❌ Installation failed. NOT added to script."
-        fi
-    done
+  local INSTALL_SCRIPT="$HOME/omarchy-supplement/install-all.sh"
+  local MARKER="# INSERT_HERE"
+
+  for PACKAGE in "$@"; do
+    echo "---------------------------------"
+    echo "Attempting to install: $PACKAGE"
+    yay -S "$PACKAGE"
+
+    if pacman -Qi "$PACKAGE" &>/dev/null; then
+      if grep -q "\"$PACKAGE\"" "$INSTALL_SCRIPT"; then
+        echo "✅ Installed, but '$PACKAGE' is already in your install list."
+      else
+        sed -i "/$MARKER/i \    \"$PACKAGE\"" "$INSTALL_SCRIPT"
+        echo "🎉 Success! Added '$PACKAGE' to your automation script."
+      fi
+    else
+      echo "❌ Installation failed. NOT added to script."
+    fi
+  done
 }
 
 # Wacom Touchscreen Toggle (Arch Compatible)
@@ -125,23 +125,23 @@ WACOM_TOUCH_ID="0018:056A:5367.0003"
 WACOM_DRIVER_PATH="/sys/bus/hid/drivers/wacom"
 
 function ts_disable() {
-    echo "Disabling Wacom Touchscreen..."
-    if [ -d "$WACOM_DRIVER_PATH/$WACOM_TOUCH_ID" ]; then
-        echo "$WACOM_TOUCH_ID" | sudo tee "$WACOM_DRIVER_PATH/unbind" >/dev/null
-        echo "Touchscreen Disabled."
-    else
-        echo "Touchscreen already disabled."
-    fi
+  echo "Disabling Wacom Touchscreen..."
+  if [ -d "$WACOM_DRIVER_PATH/$WACOM_TOUCH_ID" ]; then
+    echo "$WACOM_TOUCH_ID" | sudo tee "$WACOM_DRIVER_PATH/unbind" >/dev/null
+    echo "Touchscreen Disabled."
+  else
+    echo "Touchscreen already disabled."
+  fi
 }
 
 function ts_enable() {
-    echo "Enabling Wacom Touchscreen..."
-    if [ ! -d "$WACOM_DRIVER_PATH/$WACOM_TOUCH_ID" ]; then
-        echo "$WACOM_TOUCH_ID" | sudo tee "$WACOM_DRIVER_PATH/bind" >/dev/null
-        echo "Touchscreen Enabled."
-    else
-        echo "Touchscreen already enabled."
-    fi
+  echo "Enabling Wacom Touchscreen..."
+  if [ ! -d "$WACOM_DRIVER_PATH/$WACOM_TOUCH_ID" ]; then
+    echo "$WACOM_TOUCH_ID" | sudo tee "$WACOM_DRIVER_PATH/bind" >/dev/null
+    echo "Touchscreen Enabled."
+  else
+    echo "Touchscreen already enabled."
+  fi
 }
 
 # Fuzzy-find history and copy the selected command to the clipboard
@@ -149,8 +149,6 @@ history() {
   # This function avoids the complex quoting issues of an alias.
   builtin history | tac | fzf --bind 'enter:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
 }
-
-
 
 # testt to see if ssh-agent and ssh-add is needed before adding
 # --- SSH AGENT AUTOSTART ---
@@ -165,16 +163,8 @@ history() {
 #    ssh-add ~/.ssh/id_ed25519 2>/dev/null
 # fi
 
-
-
-
-
-
-
-
 alias venvsip='source $HOME/Documents/sip/venv/bin/activate'
 alias venvno='source $HOME/Documents/no/venv/bin/activate'
-
 
 function auto_sip() {
   cd "$HOME/Documents/sip/assignment_7/"
@@ -188,4 +178,5 @@ function tf_sip() {
   nvim .
 }
 
-
+# Rebuild nixos flake build
+alias nxb="sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos"

@@ -11,10 +11,10 @@ return {
 				pattern = "LazyReload",
 				callback = function()
 					-- Unload the theme module
-					package.loaded["plugins.theme"] = nil
+					package.loaded["plugins.all-theme"] = nil
 
 					vim.schedule(function()
-						local ok, theme_spec = pcall(require, "plugins.theme")
+						local ok, theme_spec = pcall(require, "plugins.all-theme")
 						if not ok then
 							return
 						end

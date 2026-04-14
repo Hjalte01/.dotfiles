@@ -12,6 +12,14 @@
   # Add nixos flakes for reproducibility
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+  # No SUDO password
+  security.sudo.wheelNeedsPassword = false;
+
+  # Fonts
+  fonts.packages = with pkgs; [
+    nerd-fonts.jetbrains-mono
+  ];
+
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
