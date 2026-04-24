@@ -3,7 +3,7 @@
 
 let
   # ⚠️ THE MASTER SWITCH ⚠️
-  devMode = true;
+  devMode = false;
 
   # Helper function to automatically pick the right link type
   makeLink = stringPath: nixPath:

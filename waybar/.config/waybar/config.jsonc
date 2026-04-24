@@ -11,6 +11,7 @@
     "clock"
   ],
   "modules-right": [
+    "custom/devmode",
     "group/tray-expander",
     "bluetooth",
     "network",
