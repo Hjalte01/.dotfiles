@@ -235,3 +235,9 @@ dev() {
   # Run your existing rebuild alias
   sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos
 }
+
+# --- LOAD SECRETS ---
+# Safely read the OpenAI API key if the file exists
+if [ -f "$HOME/.api_key_gpt" ]; then
+  export OPENAI_API_KEY=$(cat "$HOME/.api_key_gpt")
+fi

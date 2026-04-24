@@ -31,6 +31,7 @@ in
     curl
     wget
     tree
+    bubblewrap    # required by codex AI for secure code sandboxing
 
     # --- hypr window-manager ---
     waybar       
@@ -45,6 +46,7 @@ in
     nautilus    # Your preferred file manager
     spotify     # Your music player
     btop        # Your system monitor
+    lazygit     # Your git manager
     lazydocker  # Your docker manager
     wlr-randr   # Required by your display toggle bind
     blueman     # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
@@ -102,6 +104,12 @@ in
 
     # 7. Waybar Dev Badge Trigger
     ".cache/dev-mode-status".text = if devMode then "[ DEV ]" else "";
+      
+    # Ghostty (Directory - needs recursive)
+    ".config/ghostty" = {
+      source = makeLink "ghostty/.config/ghostty" ../ghostty/.config/ghostty;
+      recursive = true;
+    };
   };
 
 
