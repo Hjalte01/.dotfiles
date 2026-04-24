@@ -1,0 +1,44 @@
+configuration {
+    show-icons: true;
+    font: "JetBrainsMono Nerd Font 12";
+    display-drun: "🔍 Apps:";
+}
+
+* {
+    background-color: #1e1e2e;
+    text-color: #cdd6f4;
+    border-color: #cba6f7;
+}
+
+window {
+    width: 35%;
+    border: 2px;
+    border-radius: 12px;
+    padding: 15px;
+}
+
+inputbar {
+    padding: 12px;
+    border-radius: 8px;
+    background-color: #313244;
+}
+
+prompt, entry {
+    background-color: inherit;
+    text-color: inherit;
+}
+
+listview {
+    lines: 8;
+    margin: 15px 0 0 0;
+}
+
+element {
+    padding: 10px;
+    border-radius: 8px;
+}
+
+element selected {
+    background-color: #cba6f7;
+    text-color: #1e1e2e;
+}
