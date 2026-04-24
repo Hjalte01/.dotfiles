@@ -39,8 +39,6 @@ in
 
     # For your custom scripts
     jq          # Required by window_opacity.sh to parse JSON
-    ydotool     # Required by auto_clicker_toggle.sh to simulate clicks
-    zenity      # Required by auto_clicker_toggle.sh for the pop-up input box
 
     # For your app keybinds
     nautilus    # Your preferred file manager
