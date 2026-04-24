@@ -38,6 +38,13 @@
     wlr-randr   # Required by your display toggle bind
     blueman     # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
 
+    # For Fn-keys
+    brightnessctl # briightness 
+    playerctl     # 
+    pavucontrol   # sound/audio
+    swayosd       # brightness/audio graphics
+
+
 
     # --- Nvim nix packages instead of Mason ---
     vscode-langservers-extracted 
@@ -56,26 +63,29 @@
   # Notice the ../ to go up one directory!
   # ==========================================
   home.file = {
-    # 1. Neovim
+    # Neovim
     ".config/nvim" = {
       source = ../nvim/.config/nvim;
       recursive = true;
     };
 
-    # 2. Waybar
+    # Waybar
     ".config/waybar" = {
       source = ../waybar/.config/waybar;
       recursive = true;
     };
 
-    # 3. Tmux
+    # Tmux
     ".tmux.conf".source = ../tmux/.tmux.conf;
 
-    # 4. Bash
+    # Bash
     ".mybashrc.sh".source = ../bash/.mybashrc.sh;
 
-    # 5. hyprland
+    # hyprland
     ".config/hypr/hyprland.conf".source = ../hypr/hyprland.conf;
+
+    # Rofi
+    ".config/rofi/config.rasi".source = ../rofi/config.rasi;
   };
 
   # ==========================================
@@ -89,6 +99,15 @@
         source ~/.mybashrc.sh
       fi
     '';
+  };
+
+  # Enforce a global cursor theme to fix sizing/shape issues
+  home.pointerCursor = {
+    gtk.enable = true;
+    x11.enable = true;
+    name = "Adwaita";
+    package = pkgs.adwaita-icon-theme;
+    size = 24;
   };
 
   # Let Home Manager install and manage itself.
