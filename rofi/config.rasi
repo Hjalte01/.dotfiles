@@ -12,9 +12,16 @@ configuration {
 
 window {
     width: 35%;
-    border: 2px;
+    border: 2px solid;
+    border-color: #cba6f7;
     border-radius: 12px;
-    padding: 15px;
+    background-color: #1e1e2e;
+    padding: 0px; /* Remove padding from the window edge */
+}
+
+mainbox {
+    background-color: transparent;
+    padding: 15px; /* Move the padding here instead */
 }
 
 inputbar {
@@ -23,9 +30,15 @@ inputbar {
     background-color: #313244;
 }
 
-prompt, entry {
+prompt {
     background-color: inherit;
-    text-color: inherit;
+    text-color: #cba6f7; /* Bright Purple to match your border */
+    font: "JetBrainsMono Nerd Font Bold 12";
+}
+
+entry {
+    background-color: inherit;
+    text-color: #cdd6f4; /* Bright White/Gray for the text you type */
 }
 
 listview {

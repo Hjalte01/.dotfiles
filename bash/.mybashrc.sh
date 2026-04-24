@@ -216,3 +216,22 @@ ac() {
   echo -e "$new_text\n$current_clip" | wl-copy
   echo "✔ Prepended to clipboard!"
 }
+
+# Toggle NixOS Development Mode
+dev() {
+  local file="$HOME/.dotfiles/home-manager/home.nix"
+
+  if grep -q "devMode = false;" "$file"; then
+    sed -i 's/devMode = false;/devMode = true;/g' "$file"
+    echo "🔧 Dev Mode ENABLED. Rebuilding system..."
+  elif grep -q "devMode = true;" "$file"; then
+    sed -i 's/devMode = true;/devMode = false;/g' "$file"
+    echo "🔒 Dev Mode DISABLED. Locking files to Nix store..."
+  else
+    echo "❌ Error: Could not find 'devMode' toggle in home.nix"
+    return 1
+  fi
+
+  # Run your existing rebuild alias
+  sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos
+}

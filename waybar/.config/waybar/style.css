@@ -100,3 +100,12 @@ tooltip {
     border: 1px solid #ffffff;
     border-radius: 50%;
 }
+
+#custom-devmode {
+    background-color: #cba6f7;
+    color: #1e1e2e;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 0 10px;
+    margin: 0 5px;
+}

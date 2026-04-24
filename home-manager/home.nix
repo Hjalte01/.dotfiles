@@ -1,5 +1,16 @@
 { config, pkgs, ... }:
 
+
+let
+  # ⚠️ THE MASTER SWITCH ⚠️
+  devMode = true;
+
+  # Helper function to automatically pick the right link type
+  makeLink = stringPath: nixPath:
+    if devMode 
+    then config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.dotfiles/${stringPath}"
+    else nixPath;
+in
 {
   home.username = "hjalte"; 
   home.homeDirectory = "/home/hjalte"; 
@@ -44,6 +55,9 @@
     pavucontrol   # sound/audio
     swayosd       # brightness/audio graphics
 
+    grim          # takes the picture 
+    slurp         # Drags the captured picture
+
 
 
     # --- Nvim nix packages instead of Mason ---
@@ -60,33 +74,37 @@
 
   # ==========================================
   # SYMLINKING DOTFILES
-  # Notice the ../ to go up one directory!
   # ==========================================
   home.file = {
-    # Neovim
+    # 1. Neovim (Directory - needs recursive)
     ".config/nvim" = {
-      source = ../nvim/.config/nvim;
+      source = makeLink "nvim/.config/nvim" ../nvim/.config/nvim;
       recursive = true;
     };
 
-    # Waybar
+    # 2. Waybar (Directory - needs recursive)
     ".config/waybar" = {
-      source = ../waybar/.config/waybar;
+      source = makeLink "waybar/.config/waybar" ../waybar/.config/waybar;
       recursive = true;
     };
 
-    # Tmux
-    ".tmux.conf".source = ../tmux/.tmux.conf;
+    # 3. Rofi (Single File)
+    ".config/rofi/config.rasi".source = makeLink "rofi/config.rasi" ../rofi/config.rasi;
 
-    # Bash
-    ".mybashrc.sh".source = ../bash/.mybashrc.sh;
+    # 4. Tmux (Single File)
+    ".tmux.conf".source = makeLink "tmux/.tmux.conf" ../tmux/.tmux.conf;
 
-    # hyprland
-    ".config/hypr/hyprland.conf".source = ../hypr/hyprland.conf;
+    # 5. Bash (Single File)
+    ".mybashrc.sh".source = makeLink "bash/.mybashrc.sh" ../bash/.mybashrc.sh;
 
-    # Rofi
-    ".config/rofi/config.rasi".source = ../rofi/config.rasi;
+    # 6. Hyprland (Single File)
+    ".config/hypr/hyprland.conf".source = makeLink "hypr/hyprland.conf" ../hypr/hyprland.conf;
+
+    # 7. Waybar Dev Badge Trigger
+    ".cache/dev-mode-status".text = if devMode then "[ DEV ]" else "";
   };
+
+
 
   # ==========================================
   # NATIVE BASH CONFIGURATION
