@@ -86,3 +86,21 @@ if not exists then
 else
   print("Mapping <leader>ww already exists")
 end
+----------------------------------------
+--- easier to copy errors and such to clickboard
+----------------------------------------
+vim.keymap.set("n", "<leader>by", "<cmd>%y+<cr>", { desc = "Buffer Yank (Copy all)" })
+-- Copy ALL notification history to clipboard instantly
+vim.keymap.set("n", "<leader>bY", function()
+  local history = require("snacks").notifier.get_history()
+  local lines = {}
+  for _, notif in ipairs(history) do
+    -- Format: [Time] Level: Message
+    local time = os.date("%H:%M", notif.added)
+    table.insert(lines, string.format("[%s] %s: %s", time, notif.level, notif.msg))
+  end
+
+  local text = table.concat(lines, "\n")
+  vim.fn.setreg("+", text) -- Put in system clipboard
+  -- vim.notify("Copied " .. #lines .. " notifications to clipboard!")
+end, { desc = "Copy ALL notifications to clipboard" })

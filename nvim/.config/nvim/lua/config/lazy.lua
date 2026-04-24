@@ -31,6 +31,9 @@ require("lazy").setup({
     -- 3. import/override with your plugins -- need to be last
     { import = "plugins" },
   },
+
+  lockfile = vim.fn.stdpath("data") .. "/lazy-lock.json",
+
   defaults = {
     -- By default, only LazyVim plugins will be lazy-loaded. Your custom plugins will load during startup.
     -- If you know what you're doing, you can set this to `true` to have all your custom plugins lazy-loaded by default.

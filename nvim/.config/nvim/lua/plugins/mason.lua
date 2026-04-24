@@ -4,10 +4,8 @@ return {
     "mason-org/mason.nvim",
     opts = {
       ensure_installed = {
-        "stylua",
-        "shellcheck",
-        "shfmt",
-        "flake8",
+
+        -- Nix will handle this instead
       },
     },
   },

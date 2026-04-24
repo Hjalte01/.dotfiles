@@ -21,9 +21,35 @@
     wget
     tree
 
+    # --- hypr window-manager ---
     waybar       
     rofi
-  ];
+
+    # For your custom scripts
+    jq          # Required by window_opacity.sh to parse JSON
+    ydotool     # Required by auto_clicker_toggle.sh to simulate clicks
+    zenity      # Required by auto_clicker_toggle.sh for the pop-up input box
+
+    # For your app keybinds
+    nautilus    # Your preferred file manager
+    spotify     # Your music player
+    btop        # Your system monitor
+    lazydocker  # Your docker manager
+    wlr-randr   # Required by your display toggle bind
+    blueman     # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
+
+
+    # --- Nvim nix packages instead of Mason ---
+    vscode-langservers-extracted 
+    python311Packages.flake8  # Adds flake8 to your PATH correctly
+    vtsls
+    pyright
+    stylua
+    shfmt
+    shellcheck
+    lua-language-server
+    jdt-language-server
+  ];  
 
   # ==========================================
   # SYMLINKING DOTFILES

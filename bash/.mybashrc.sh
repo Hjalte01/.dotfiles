@@ -52,13 +52,22 @@ for i in $(seq 1 10); do
   cmd_str="$cmd_str/.."
 done
 
-# Config & Project Shortcuts
-alias brc="nvim $HOME/.dotfiles/bash/.mybashrc.sh"
-alias brc.=". $HOME/.bashrc"
+# --- Config & Project Shortcuts ---
+# Others
 alias cd.="cd $HOME/.dotfiles"
 alias hypr="nvim $HOME/.dotfiles/hypr/hyprland.conf"
+
+# for bash
+alias brc="nvim $HOME/.dotfiles/bash/.mybashrc.sh"
+alias brc.=". $HOME/.bashrc"
+
+# for nix
 alias home="nvim $HOME/.dotfiles/home-manager/home.nix"
 alias conf="nvim $HOME/.dotfiles/nixos/configuration.nix"
+
+# for nvim
+alias nvimconf="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/plugins/code-companion.lua.bak"
+alias nvimkeyb="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/config/keymaps.lua"
 
 # Wifi Toggle
 alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"

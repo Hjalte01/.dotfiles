@@ -93,12 +93,13 @@
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
+  virtualisation.virtualbox.host.enable = true;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.hjalte = {
     isNormalUser = true;
     description = "Hjalte";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [ "networkmanager" "wheel" "vboxusers" ];
     packages = with pkgs; [
     #  thunderbird
     ];
@@ -116,10 +117,11 @@
   #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
   #  wget
     git
+    vagrant
   ];
 
 
-# ==========================================
+  # ==========================================
   # KEYBOARD REMAPPING (keyd)
   # ==========================================
   services.keyd = {
@@ -159,6 +161,18 @@
       };
     };
   };
+  
+  # Inside your configuration.nix
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    stdenv.cc.cc
+    zlib
+    fuse3
+    openssl
+    icu
+    nss
+    expat
+  ];
 
 
 
