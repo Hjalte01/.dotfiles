@@ -20,3 +20,7 @@ cursor-style-blink = false
 
 # Slowdown mouse scrolling
 mouse-scroll-multiplier = 0.95
+
+# Trying to fix ghostty crash
+gtk-single-instance = true # one control all kind of thing
+window-decoration = false
