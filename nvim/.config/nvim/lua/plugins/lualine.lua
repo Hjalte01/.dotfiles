@@ -15,7 +15,7 @@ return {
       })
       table.insert(opts.sections.lualine_x, {
         function()
-          return "😄"
+          return ""
         end,
       })
     end,

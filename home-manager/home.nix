@@ -3,7 +3,7 @@
 
 let
   # ⚠️ THE MASTER SWITCH ⚠️
-  devMode = true;
+  devMode = false;
 
   # Helper function to automatically pick the right link type
   makeLink = stringPath: nixPath:
@@ -30,6 +30,10 @@ in
     unzip        # required by mason
     curl
     wget
+    unzip
+    fzf
+    
+    glow
     tree
     bubblewrap    # required by codex AI for secure code sandboxing
 
@@ -70,6 +74,9 @@ in
     shellcheck
     lua-language-server
     jdt-language-server
+    glibc.dev   # The core C standard library headers (<stdio.h>, <stdlib.h>)
+
+    clang-tools
   ];  
 
   # ==========================================
