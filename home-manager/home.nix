@@ -23,6 +23,9 @@ in
     fd           # LazyVim needs this
     gcc          # Needed for Treesitter
     wl-clipboard # Clipboard support
+    imv          # billedeviser til wayland
+    mpv          # videoafspilere
+    libnotify    # beskeder om ting virker?
 
     ghostty      # Terminal
     tree-sitter  # Nvim needs it
@@ -36,6 +39,8 @@ in
     glow
     tree
     bubblewrap    # required by codex AI for secure code sandboxing
+    man-pages     # C library/API man pages, e.g. man 3 printf
+    man-pages-posix
 
     # --- hypr window-manager ---
     waybar       
@@ -117,7 +122,18 @@ in
     };
   };
 
-
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "image/png" = [ "imv.desktop" ];
+      "image/jpeg" = [ "imv.desktop" ];
+      "image/gif" = [ "imv.desktop" ];
+      "video/mp4" = [ "mpv.desktop" ];
+      "video/webm" = [ "mpv.desktop" ];
+      "video/x-matroska" = [ "mpv.desktop" ];
+      "application/pdf" = [ "firefox.desktop" ]; # Eksempel: Åbn PDF i Firefox
+    };
+  };
 
   # ==========================================
   # NATIVE BASH CONFIGURATION
