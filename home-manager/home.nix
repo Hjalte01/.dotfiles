@@ -26,6 +26,8 @@ in
     imv          # billedeviser til wayland
     mpv          # videoafspilere
     libnotify    # beskeder om ting virker?
+    yt-dlp       # Download youtube vid
+    ffmpeg       # Handle the downloade video
 
     ghostty      # Terminal
     tree-sitter  # Nvim needs it

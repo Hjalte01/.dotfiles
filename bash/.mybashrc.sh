@@ -59,7 +59,7 @@ alias hypr="nvim $HOME/.dotfiles/hypr/hyprland.conf"
 
 # for bash
 alias brc="nvim $HOME/.dotfiles/bash/.mybashrc.sh"
-alias brc.=". $HOME/.bashrc"
+alias brc.=". $HOME/.dotfiles/bash/.mybashrc.sh"
 
 # for nix
 alias home="nvim $HOME/.dotfiles/home-manager/home.nix"
@@ -241,3 +241,7 @@ dev() {
 if [ -f "$HOME/.api_key_gpt" ]; then
   export OPENAI_API_KEY=$(cat "$HOME/.api_key_gpt")
 fi
+
+# Custom yt-dlp shortcuts
+alias yt-mp4='yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best" --merge-output-format mp4 -o "%(title)s.%(ext)s"'
+alias yt-mp3='yt-dlp -x --audio-format mp3 -o "%(title)s.%(ext)s"'
