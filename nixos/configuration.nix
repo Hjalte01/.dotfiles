@@ -15,6 +15,13 @@
   # No SUDO password
   security.sudo.wheelNeedsPassword = false;
 
+  # Blacklist touchscreen
+  # boot.blacklistedKernelModules = [ "wacom" "hid_multitouch" ];
+  # Permanently ignore ghost inputs from Wacom touchscreen
+  services.udev.extraRules = ''
+    ATTRS{name}=="*Wacom HID 5367*", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+  '';
+
   # Fonts
   fonts.packages = with pkgs; [
     nerd-fonts.jetbrains-mono
