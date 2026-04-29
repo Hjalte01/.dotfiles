@@ -65,6 +65,71 @@
 
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
+
+  # The physical power button is handled by acpid below so it requires two
+  # separate presses within three seconds instead of shutting down immediately.
+  services.logind.settings.Login = {
+    HandlePowerKey = "ignore";
+    HandlePowerKeyLongPress = "ignore";
+  };
+
+  services.acpid = {
+    enable = true;
+    handlers.powerEvent = {
+      event = "button/power.*";
+      action = ''
+        state_dir=/run/power-button-confirm
+        state_file="$state_dir/armed-at"
+        now="$(${pkgs.coreutils}/bin/date +%s%3N)"
+        min_confirm_delay_ms=600
+        confirm_window_ms=3000
+
+        log() {
+          ${pkgs.systemd}/bin/systemd-cat -t power-button-confirm echo "$1"
+        }
+
+        arm_shutdown() {
+          ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
+          printf '%s\n' "$now" > "$state_file"
+          log "Shutdown armed. Press the power button again within 3 seconds to shut down."
+        }
+
+        if [ ! -f "$state_file" ]; then
+          arm_shutdown
+          exit 0
+        fi
+
+        armed_at="$(${pkgs.coreutils}/bin/cat "$state_file" 2>/dev/null || true)"
+        if [ -z "$armed_at" ]; then
+          arm_shutdown
+          exit 0
+        fi
+
+        case "$armed_at" in
+          *[!0-9]*)
+            arm_shutdown
+            exit 0
+            ;;
+        esac
+
+        elapsed_ms=$((now - armed_at))
+
+        if [ "$elapsed_ms" -lt "$min_confirm_delay_ms" ]; then
+          log "Ignored repeated power-button event after ''${elapsed_ms}ms."
+          exit 0
+        fi
+
+        if [ "$elapsed_ms" -le "$confirm_window_ms" ]; then
+          ${pkgs.coreutils}/bin/rm -f "$state_file"
+          log "Confirmed shutdown from second power-button press."
+          ${pkgs.systemd}/bin/systemctl poweroff
+          exit 0
+        fi
+
+        arm_shutdown
+      '';
+    };
+  };
   
   # Enable the GNOME Desktop Environment.
   services.displayManager.gdm.enable = true;
