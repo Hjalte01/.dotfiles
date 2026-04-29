@@ -28,6 +28,15 @@ return {
       opts.sort = {
         key_sort_value,
       }
+
+      opts.spec = vim.list_extend(opts.spec or {}, {
+        {
+          "<leader>a",
+          group = "AI",
+          icon = { icon = " ", color = "green" },
+          mode = { "n", "t" },
+        },
+      })
     end,
   },
 
