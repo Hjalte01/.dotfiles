@@ -11,6 +11,36 @@ return {
       desc = "Toggle Codex Agent",
       mode = { "n", "t" },
     },
+    {
+      "<leader>ar",
+      function()
+        require("snacks.terminal")({ "codex", "resume" }, {
+          cwd = vim.fn.getcwd(),
+          win = {
+            border = "rounded",
+            width = 0.8,
+            height = 0.8,
+          },
+        })
+      end,
+      desc = "Resume Codex Session",
+      mode = { "n", "t" },
+    },
+    {
+      "<leader>aR",
+      function()
+        require("snacks.terminal")({ "codex", "resume", "--last" }, {
+          cwd = vim.fn.getcwd(),
+          win = {
+            border = "rounded",
+            width = 0.8,
+            height = 0.8,
+          },
+        })
+      end,
+      desc = "Resume Last Codex Session",
+      mode = { "n", "t" },
+    },
   },
   opts = {
     keymaps = {
