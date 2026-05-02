@@ -23,6 +23,7 @@ alias ll='ls -alF'
 alias la='ls -A'
 alias l='ls -CF'
 alias cl="clear"
+alias open='xdg-open'
 
 # Set bash editor to Vi
 set -o vi
@@ -80,6 +81,13 @@ export MANPAGER='nvim +Man!'
 
 # Add HOME/.local/bin to PATH to place user scripts
 export PATH="$HOME/.local/bin:$PATH"
+
+# Smart/frecency directory jumping. With --cmd cd, commands like
+# "cd documen" jump to a learned matching directory such as ~/Documents.
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init bash --cmd cd)"
+  alias zz='zi'
+fi
 # ==========================================
 # 5. FUNCTIONS
 # ==========================================

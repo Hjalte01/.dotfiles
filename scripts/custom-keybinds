@@ -1,23 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-config="${HYPRLAND_CONFIG:-$HOME/.config/hypr/hyprland.conf}"
+dotfiles_config="$HOME/.dotfiles/hypr/hyprland.conf"
+if [[ -n "${HYPRLAND_CONFIG:-}" ]]; then
+  config="$HYPRLAND_CONFIG"
+elif [[ -f "$dotfiles_config" ]]; then
+  config="$dotfiles_config"
+else
+  config="$HOME/.config/hypr/hyprland.conf"
+fi
+
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
 state_file="$cache_dir/custom-keybinds-sort"
-recent_file="$cache_dir/custom-keybinds-recent"
+used_file="$cache_dir/custom-keybinds-used"
 details_file="$cache_dir/custom-keybinds-details"
 
 mkdir -p "$cache_dir"
 
-mode="recent"
+mode="added"
 if [[ -f "$state_file" ]]; then
   IFS= read -r mode < "$state_file"
 fi
-if [[ "$mode" != "recent" && "$mode" != "keybind" && "$mode" != "name" ]]; then
-  mode="recent"
+if [[ "$mode" == "recent" ]]; then
+  mode="used"
+  printf '%s\n' "$mode" > "$state_file"
+fi
+if [[ "$mode" != "added" && "$mode" != "used" && "$mode" != "keybind" && "$mode" != "name" ]]; then
+  mode="added"
 fi
 
 format_keybinds() {
+  local source_file="${1:-$config}"
   awk '
     function trim(s) {
       gsub(/^[ \t]+|[ \t]+$/, "", s)
@@ -64,7 +77,7 @@ format_keybinds() {
         combo = mods "+" key
       }
       display = sprintf("%-22s  %s", combo, title)
-      printf "%s\t%s\n", display, command
+      printf "%s\t%s\t%s\n", display, command, combo
     }
     /^[ \t]*bindd[ \t]*=/ {
       line = $0
@@ -91,11 +104,58 @@ format_keybinds() {
         emit(parts[1], parts[2], title, command)
       }
     }
-  ' "$config"
+  ' "$source_file"
+}
+
+git_added_keybinds() {
+  local repo_root config_rel tmp_history tmp_seen tmp_commit
+
+  repo_root="$(git -C "$(dirname "$config")" rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$repo_root" ]] || return 1
+
+  config_rel="$(realpath --relative-to="$repo_root" "$config" 2>/dev/null || true)"
+  [[ -n "$config_rel" && -f "$repo_root/$config_rel" ]] || return 1
+
+  tmp_history="$(mktemp)"
+  tmp_seen="$(mktemp)"
+  tmp_commit="$(mktemp)"
+
+  cut -f3 "$details_file" | sort -u > "$tmp_seen"
+
+  while IFS=: read -r commit_time commit_hash; do
+    [[ -n "$commit_time" && -n "$commit_hash" ]] || continue
+    if git -C "$repo_root" show "$commit_hash:$config_rel" > "$tmp_commit" 2>/dev/null; then
+      format_keybinds "$tmp_commit" | cut -f3 | while IFS= read -r combo; do
+        grep -Fxq "$combo" "$tmp_seen" || continue
+        printf '%s\t%s\n' "$combo" "$commit_time"
+      done
+    fi
+  done < <(git -C "$repo_root" log --reverse --format='%ct:%H' -- "$config_rel") > "$tmp_history"
+
+  awk -F '\t' '
+    NR == FNR {
+      if (!first[$1]) first[$1] = $2
+      next
+    }
+    {
+      display = $1
+      command = $2
+      combo = $3
+      score = first[combo] ? first[combo] : 9999999999
+      printf "%s\t%s\n", score, display
+    }
+  ' "$tmp_history" "$details_file" | sort -rn | cut -f2-
+
+  rm -f "$tmp_history" "$tmp_seen" "$tmp_commit"
 }
 
 ordered_keybinds() {
   format_keybinds > "$details_file"
+
+  if [[ "$mode" == "added" ]]; then
+    git_added_keybinds || cut -f1 "$details_file"
+    return
+  fi
 
   if [[ "$mode" == "keybind" ]]; then
     cut -f1 "$details_file" | sort -f
@@ -109,17 +169,18 @@ ordered_keybinds() {
 
   tmp="$(mktemp)"
   cut -f1 "$details_file" > "$tmp"
-  if [[ -f "$recent_file" ]]; then
-    awk 'NR==FNR { all[$0] = 1; next } all[$0] && !seen[$0]++ { print }' "$tmp" "$recent_file"
+  if [[ -f "$used_file" ]]; then
+    awk 'NR==FNR { all[$0] = 1; next } all[$0] && !seen[$0]++ { print }' "$tmp" "$used_file"
   fi
-  awk 'NR==FNR { recent[$0] = 1; next } !recent[$0] { print }' "$recent_file" "$tmp" 2>/dev/null || cat "$tmp"
+  awk 'NR==FNR { used[$0] = 1; next } !used[$0] { print }' "$used_file" "$tmp" 2>/dev/null || cat "$tmp"
   rm -f "$tmp"
 }
 
 while true; do
   selection="$(
     {
-      printf '%s\n' "Sort: recent"
+      printf '%s\n' "Sort: added"
+      printf '%s\n' "Sort: used"
       printf '%s\n' "Sort: keybind"
       printf '%s\n' "Sort: name"
       ordered_keybinds
@@ -129,8 +190,13 @@ while true; do
   [[ -n "$selection" ]] || exit 0
 
   case "$selection" in
-    "Sort: recent")
-      mode="recent"
+    "Sort: added")
+      mode="added"
+      printf '%s\n' "$mode" > "$state_file"
+      continue
+      ;;
+    "Sort: used")
+      mode="used"
       printf '%s\n' "$mode" > "$state_file"
       continue
       ;;
@@ -148,9 +214,9 @@ while true; do
 
   {
     printf '%s\n' "$selection"
-    [[ -f "$recent_file" ]] && grep -Fvx -- "$selection" "$recent_file" || true
-  } > "$recent_file.tmp"
-  mv "$recent_file.tmp" "$recent_file"
+    [[ -f "$used_file" ]] && grep -Fvx -- "$selection" "$used_file" || true
+  } > "$used_file.tmp"
+  mv "$used_file.tmp" "$used_file"
 
   command="$(awk -F '\t' -v selected="$selection" '$1 == selected { print $2; exit }' "$details_file")"
   notify-send "Keybind" "$selection${command:+

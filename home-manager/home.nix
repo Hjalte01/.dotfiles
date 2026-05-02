@@ -41,6 +41,8 @@ in
     wget
     unzip
     fzf
+    zoxide      # Smart/frecency directory jumping
+    xdg-utils   # Provides xdg-open for the open alias
     
     glow
     tree
