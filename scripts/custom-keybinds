@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+config="${HYPRLAND_CONFIG:-$HOME/.config/hypr/hyprland.conf}"
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
+state_file="$cache_dir/custom-keybinds-sort"
+recent_file="$cache_dir/custom-keybinds-recent"
+
+mkdir -p "$cache_dir"
+
+mode="recent"
+if [[ -f "$state_file" ]]; then
+  mode="$(<"$state_file")"
+fi
+if [[ "$mode" != "recent" && "$mode" != "alphabetical" ]]; then
+  mode="recent"
+fi
+
+format_keybinds() {
+  awk '
+    function trim(s) {
+      gsub(/^[ \t]+|[ \t]+$/, "", s)
+      return s
+    }
+    function pretty_mods(s) {
+      s = trim(s)
+      gsub(/SUPER/, "Leader", s)
+      gsub(/SHIFT/, "Shift", s)
+      gsub(/CTRL/, "Ctrl", s)
+      gsub(/ALT/, "Alt", s)
+      gsub(/[ \t]+/, "+", s)
+      return s
+    }
+    function pretty_key(s) {
+      s = trim(s)
+      if (s == "RETURN") return "Enter"
+      if (s == "SPACE") return "Space"
+      if (s == "comma") return ","
+      if (s == "Print") return "Print"
+      return s
+    }
+    function emit(mods, key, title, command) {
+      mods = pretty_mods(mods)
+      key = pretty_key(key)
+      title = trim(title)
+      command = trim(command)
+      if (key ~ /^switch:/ || command == "true") return
+      if (mods == "") {
+        combo = key
+      } else {
+        combo = mods "+" key
+      }
+      printf "%-22s  %-24s  %s\n", combo, title, command
+    }
+    /^[ \t]*bindd[ \t]*=/ {
+      line = $0
+      sub(/^[ \t]*bindd[ \t]*=[ \t]*/, "", line)
+      n = split(line, parts, ",")
+      if (n >= 5) {
+        command = trim(parts[4])
+        for (i = 5; i <= n; i++) command = command ", " trim(parts[i])
+        emit(parts[1], parts[2], parts[3], command)
+      }
+      next
+    }
+    /^[ \t]*bind(el|l)?[ \t]*=/ {
+      line = $0
+      sub(/^[ \t]*bind(el|l)?[ \t]*=[ \t]*/, "", line)
+      n = split(line, parts, ",")
+      if (n >= 4) {
+        title = trim(parts[3])
+        command = trim(parts[4])
+        for (i = 5; i <= n; i++) command = command ", " trim(parts[i])
+        emit(parts[1], parts[2], title, command)
+      }
+    }
+  ' "$config"
+}
+
+ordered_keybinds() {
+  if [[ "$mode" == "alphabetical" ]]; then
+    format_keybinds | sort -f
+    return
+  fi
+
+  tmp="$(mktemp)"
+  format_keybinds > "$tmp"
+  if [[ -f "$recent_file" ]]; then
+    awk 'NR==FNR { all[$0] = 1; next } all[$0] && !seen[$0]++ { print }' "$tmp" "$recent_file"
+  fi
+  awk 'NR==FNR { recent[$0] = 1; next } !recent[$0] { print }' "$recent_file" "$tmp" 2>/dev/null || cat "$tmp"
+  rm -f "$tmp"
+}
+
+while true; do
+  if [[ "$mode" == "recent" ]]; then
+    toggle="Sort: alphabetical"
+  else
+    toggle="Sort: recent"
+  fi
+
+  selection="$(
+    {
+      printf '%s\n' "$toggle"
+      ordered_keybinds
+    } | rofi -dmenu -i -p "Keybinds ($mode)"
+  )"
+
+  [[ -n "$selection" ]] || exit 0
+
+  case "$selection" in
+    "Sort: alphabetical")
+      mode="alphabetical"
+      printf '%s\n' "$mode" > "$state_file"
+      continue
+      ;;
+    "Sort: recent")
+      mode="recent"
+      printf '%s\n' "$mode" > "$state_file"
+      continue
+      ;;
+  esac
+
+  {
+    printf '%s\n' "$selection"
+    [[ -f "$recent_file" ]] && grep -Fvx -- "$selection" "$recent_file" || true
+  } > "$recent_file.tmp"
+  mv "$recent_file.tmp" "$recent_file"
+
+  notify-send "Keybind" "$selection"
+  exit 0
+done

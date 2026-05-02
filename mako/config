@@ -1,0 +1,17 @@
+default-timeout=3000
+max-visible=5
+sort=-time
+
+background-color=#1e1e2e
+text-color=#cdd6f4
+border-color=#cba6f7
+progress-color=over #313244
+
+border-size=2
+border-radius=10
+padding=12
+margin=10
+width=420
+
+[urgency=high]
+default-timeout=0

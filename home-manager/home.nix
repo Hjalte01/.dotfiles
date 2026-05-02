@@ -109,16 +109,25 @@ in
     # 3. Rofi (Single File)
     ".config/rofi/config.rasi".source = makeLink "rofi/config.rasi" ../rofi/config.rasi;
 
-    # 4. Tmux (Single File)
+    # 4. Mako notifications
+    ".config/mako/config".source = makeLink "mako/config" ../mako/config;
+
+    # 5. Custom scripts
+    ".local/bin/custom-keybinds" = {
+      source = makeLink "scripts/custom-keybinds" ../scripts/custom-keybinds;
+      executable = true;
+    };
+
+    # 6. Tmux (Single File)
     ".tmux.conf".source = makeLink "tmux/.tmux.conf" ../tmux/.tmux.conf;
 
-    # 5. Bash (Single File)
+    # 7. Bash (Single File)
     ".mybashrc.sh".source = makeLink "bash/.mybashrc.sh" ../bash/.mybashrc.sh;
 
-    # 6. Hyprland (Single File)
+    # 8. Hyprland (Single File)
     ".config/hypr/hyprland.conf".source = makeLink "hypr/hyprland.conf" ../hypr/hyprland.conf;
 
-    # 7. Waybar Dev Badge Trigger
+    # 9. Waybar Dev Badge Trigger
     ".cache/dev-mode-status".text = if devMode then "[ DEV ]" else "";
       
     # Ghostty (Directory - needs recursive)
