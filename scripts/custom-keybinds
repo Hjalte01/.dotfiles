@@ -5,14 +5,15 @@ config="${HYPRLAND_CONFIG:-$HOME/.config/hypr/hyprland.conf}"
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
 state_file="$cache_dir/custom-keybinds-sort"
 recent_file="$cache_dir/custom-keybinds-recent"
+details_file="$cache_dir/custom-keybinds-details"
 
 mkdir -p "$cache_dir"
 
 mode="recent"
 if [[ -f "$state_file" ]]; then
-  mode="$(<"$state_file")"
+  IFS= read -r mode < "$state_file"
 fi
-if [[ "$mode" != "recent" && "$mode" != "alphabetical" ]]; then
+if [[ "$mode" != "recent" && "$mode" != "keybind" && "$mode" != "name" ]]; then
   mode="recent"
 fi
 
@@ -39,21 +40,35 @@ format_keybinds() {
       if (s == "Print") return "Print"
       return s
     }
+    function title_from_comment(line) {
+      if (match(line, /#[ \t]*(keybind|name|desc|description):[ \t]*/)) {
+        title = substr(line, RSTART + RLENGTH)
+        return trim(title)
+      }
+      return ""
+    }
+    function strip_keybind_comment(line) {
+      sub(/[ \t]*#[ \t]*(keybind|name|desc|description):.*/, "", line)
+      return line
+    }
     function emit(mods, key, title, command) {
       mods = pretty_mods(mods)
       key = pretty_key(key)
       title = trim(title)
       command = trim(command)
       if (key ~ /^switch:/ || command == "true") return
+      if (title == "" || title == "exec") title = "Unnamed"
       if (mods == "") {
         combo = key
       } else {
         combo = mods "+" key
       }
-      printf "%-22s  %-24s  %s\n", combo, title, command
+      display = sprintf("%-22s  %s", combo, title)
+      printf "%s\t%s\n", display, command
     }
     /^[ \t]*bindd[ \t]*=/ {
       line = $0
+      line = strip_keybind_comment(line)
       sub(/^[ \t]*bindd[ \t]*=[ \t]*/, "", line)
       n = split(line, parts, ",")
       if (n >= 5) {
@@ -65,10 +80,12 @@ format_keybinds() {
     }
     /^[ \t]*bind(el|l)?[ \t]*=/ {
       line = $0
+      override = title_from_comment(line)
+      line = strip_keybind_comment(line)
       sub(/^[ \t]*bind(el|l)?[ \t]*=[ \t]*/, "", line)
       n = split(line, parts, ",")
       if (n >= 4) {
-        title = trim(parts[3])
+        title = override != "" ? override : trim(parts[3])
         command = trim(parts[4])
         for (i = 5; i <= n; i++) command = command ", " trim(parts[i])
         emit(parts[1], parts[2], title, command)
@@ -78,13 +95,20 @@ format_keybinds() {
 }
 
 ordered_keybinds() {
-  if [[ "$mode" == "alphabetical" ]]; then
-    format_keybinds | sort -f
+  format_keybinds > "$details_file"
+
+  if [[ "$mode" == "keybind" ]]; then
+    cut -f1 "$details_file" | sort -f
+    return
+  fi
+
+  if [[ "$mode" == "name" ]]; then
+    cut -f1 "$details_file" | sort -f -k2
     return
   fi
 
   tmp="$(mktemp)"
-  format_keybinds > "$tmp"
+  cut -f1 "$details_file" > "$tmp"
   if [[ -f "$recent_file" ]]; then
     awk 'NR==FNR { all[$0] = 1; next } all[$0] && !seen[$0]++ { print }' "$tmp" "$recent_file"
   fi
@@ -93,15 +117,11 @@ ordered_keybinds() {
 }
 
 while true; do
-  if [[ "$mode" == "recent" ]]; then
-    toggle="Sort: alphabetical"
-  else
-    toggle="Sort: recent"
-  fi
-
   selection="$(
     {
-      printf '%s\n' "$toggle"
+      printf '%s\n' "Sort: recent"
+      printf '%s\n' "Sort: keybind"
+      printf '%s\n' "Sort: name"
       ordered_keybinds
     } | rofi -dmenu -i -p "Keybinds ($mode)"
   )"
@@ -109,13 +129,18 @@ while true; do
   [[ -n "$selection" ]] || exit 0
 
   case "$selection" in
-    "Sort: alphabetical")
-      mode="alphabetical"
+    "Sort: recent")
+      mode="recent"
       printf '%s\n' "$mode" > "$state_file"
       continue
       ;;
-    "Sort: recent")
-      mode="recent"
+    "Sort: keybind")
+      mode="keybind"
+      printf '%s\n' "$mode" > "$state_file"
+      continue
+      ;;
+    "Sort: name")
+      mode="name"
       printf '%s\n' "$mode" > "$state_file"
       continue
       ;;
@@ -127,6 +152,8 @@ while true; do
   } > "$recent_file.tmp"
   mv "$recent_file.tmp" "$recent_file"
 
-  notify-send "Keybind" "$selection"
+  command="$(awk -F '\t' -v selected="$selection" '$1 == selected { print $2; exit }' "$details_file")"
+  notify-send "Keybind" "$selection${command:+
+$command}"
   exit 0
 done
