@@ -26,8 +26,12 @@ in
     imv          # billedeviser til wayland
     mpv          # videoafspilere
     libnotify    # beskeder om ting virker?
+    mako         # notification daemon for notify-send popups on Wayland
     yt-dlp       # Download youtube vid
     ffmpeg       # Handle the downloade video
+
+    steam-run    # Run games in Nix
+    unrar        # unzip rar files
 
     ghostty      # Terminal
     tree-sitter  # Nvim needs it
@@ -121,6 +125,20 @@ in
     ".config/ghostty" = {
       source = makeLink "ghostty/.config/ghostty" ../ghostty/.config/ghostty;
       recursive = true;
+    };
+  };
+
+  systemd.user.services.waybar = {
+    Unit = {
+      Description = "Waybar status bar";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+
+    Service = {
+      ExecStart = "${pkgs.waybar}/bin/waybar";
+      Restart = "always";
+      RestartSec = 2;
     };
   };
 
