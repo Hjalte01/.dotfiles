@@ -33,6 +33,8 @@ in
     steam-run    # Run games in Nix
     unrar        # unzip rar files
 
+    tor-browser
+
     ghostty      # Terminal
     tree-sitter  # Nvim needs it
     nodejs_22    # required by mason
