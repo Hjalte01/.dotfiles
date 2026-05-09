@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mode="do-not-disturb"
+
+makoctl mode -t "$mode"
+
+if makoctl mode | grep -Fxq "$mode"; then
+  makoctl dismiss --all
+else
+  notify-send "Notification popups" "Enabled"
+fi

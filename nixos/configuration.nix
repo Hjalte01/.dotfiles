@@ -66,6 +66,17 @@
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
 
+  systemd.services.ydotoold = {
+    description = "ydotool input daemon";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.bash}/bin/bash -lc 'exec ${pkgs.ydotool}/bin/ydotoold --socket-path=/run/ydotoold/socket --socket-perm=0660 --socket-own=$(${pkgs.coreutils}/bin/id -u hjalte):$(${pkgs.coreutils}/bin/id -g hjalte)'";
+      Restart = "always";
+      RestartSec = 2;
+      RuntimeDirectory = "ydotoold";
+    };
+  };
+
   # The physical power button is handled by acpid below so it requires two
   # separate presses within three seconds instead of shutting down immediately.
   services.logind.settings.Login = {

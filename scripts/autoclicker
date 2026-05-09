@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+state_dir="$runtime_dir/autoclicker"
+armed_file="$state_dir/z-armed"
+pid_file="$state_dir/clicker.pid"
+socket_path="/run/ydotoold/socket"
+script_path="$HOME/.local/bin/autoclicker"
+click_delay="${AUTOCLICKER_DELAY:-0.08}"
+
+mkdir -p "$state_dir"
+
+notify() {
+  notify-send "Autoclicker" "$1" 2>/dev/null || true
+}
+
+is_clicking() {
+  [[ -f "$pid_file" ]] || return 1
+  local pid
+  IFS= read -r pid < "$pid_file" || return 1
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+stop_clicking() {
+  if is_clicking; then
+    local pid
+    IFS= read -r pid < "$pid_file"
+    kill "$pid" 2>/dev/null || true
+  fi
+  rm -f "$pid_file"
+}
+
+start_clicking() {
+  if ! command -v ydotool >/dev/null 2>&1; then
+    notify "ydotool is not installed. Rebuild Home Manager first."
+    exit 1
+  fi
+
+  if [[ ! -S "$socket_path" ]]; then
+    notify "ydotoold is not running. Rebuild NixOS and restart first."
+    exit 1
+  fi
+
+  (
+    export YDOTOOL_SOCKET="$socket_path"
+    while true; do
+      ydotool click 0xC0 >/dev/null 2>&1 || exit 1
+      sleep "$click_delay"
+    done
+  ) &
+
+  printf '%s\n' "$!" > "$pid_file"
+}
+
+arm_z() {
+  hyprctl keyword bind ", z, exec, $script_path click-toggle" >/dev/null
+  : > "$armed_file"
+  notify "z now toggles clicking"
+}
+
+disarm_z() {
+  stop_clicking
+  hyprctl keyword unbind ", z" >/dev/null || true
+  rm -f "$armed_file"
+  notify "z is normal again"
+}
+
+case "${1:-}" in
+  arm-toggle)
+    if [[ -f "$armed_file" ]]; then
+      disarm_z
+    else
+      arm_z
+    fi
+    ;;
+  click-toggle)
+    if is_clicking; then
+      stop_clicking
+      notify "clicking stopped"
+    else
+      start_clicking
+      notify "clicking started"
+    fi
+    ;;
+  off)
+    disarm_z
+    ;;
+  *)
+    printf 'Usage: %s {arm-toggle|click-toggle|off}\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac

@@ -25,6 +25,7 @@ in
     wl-clipboard # Clipboard support
     imv          # billedeviser til wayland
     mpv          # videoafspilere
+    zathura      # PDF/document viewer
     libnotify    # beskeder om ting virker?
     mako         # notification daemon for notify-send popups on Wayland
     yt-dlp       # Download youtube vid
@@ -32,6 +33,9 @@ in
 
     steam-run    # Run games in Nix
     unrar        # unzip rar files
+    
+    wineWow64Packages.stable
+    winetricks
 
     tor-browser
 
@@ -58,6 +62,7 @@ in
 
     # For your custom scripts
     jq          # Required by window_opacity.sh to parse JSON
+    ydotool     # Wayland input helper for the autoclicker
 
     # For your app keybinds
     nautilus    # Your preferred file manager
@@ -119,6 +124,16 @@ in
     # 5. Custom scripts
     ".local/bin/custom-keybinds" = {
       source = makeLink "scripts/custom-keybinds" ../scripts/custom-keybinds;
+      executable = true;
+    };
+
+    ".local/bin/autoclicker" = {
+      source = makeLink "scripts/autoclicker" ../scripts/autoclicker;
+      executable = true;
+    };
+
+    ".local/bin/notification-popups" = {
+      source = makeLink "scripts/notification-popups" ../scripts/notification-popups;
       executable = true;
     };
 
