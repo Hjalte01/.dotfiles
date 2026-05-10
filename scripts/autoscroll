@@ -2,20 +2,21 @@
 set -euo pipefail
 
 runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}/autoclicker"
-state_dir="$runtime_dir/autoclicker"
+persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}/autoscroll"
+state_dir="$runtime_dir/autoscroll"
 armed_file="$state_dir/z-armed"
-pid_file="$state_dir/clicker.pid"
-speed_file="$persist_dir/clicks-per-second"
+pid_file="$state_dir/autoscroll.pid"
+speed_file="$persist_dir/scrolls-per-second"
 socket_path="/run/ydotoold/socket"
-script_path="$HOME/.local/bin/autoclicker"
-default_speed="12"
+script_path="$HOME/.local/bin/autoscroll"
+default_speed="6"
+down_key="${AUTOSCROLL_KEY:-108}"
 
 mkdir -p "$state_dir"
 mkdir -p "$persist_dir"
 
 notify() {
-  notify-send "Autoclicker" "$1" 2>/dev/null || true
+  notify-send "Autoscroll" "$1" 2>/dev/null || true
 }
 
 read_speed() {
@@ -35,11 +36,11 @@ write_speed() {
   printf '%s\n' "$1" > "$speed_file"
 }
 
-click_delay() {
+scroll_delay() {
   awk -v speed="$(read_speed)" 'BEGIN { printf "%.6f\n", 1 / speed }'
 }
 
-is_clicking() {
+is_scrolling() {
   [[ -f "$pid_file" ]] || return 1
   local pid
   IFS= read -r pid < "$pid_file" || return 1
@@ -47,8 +48,8 @@ is_clicking() {
   kill -0 "$pid" 2>/dev/null
 }
 
-stop_clicking() {
-  if is_clicking; then
+stop_scrolling() {
+  if is_scrolling; then
     local pid
     IFS= read -r pid < "$pid_file"
     kill "$pid" 2>/dev/null || true
@@ -56,7 +57,7 @@ stop_clicking() {
   rm -f "$pid_file"
 }
 
-start_clicking() {
+start_scrolling() {
   if ! command -v ydotool >/dev/null 2>&1; then
     notify "ydotool is not installed. Rebuild Home Manager first."
     exit 1
@@ -69,10 +70,10 @@ start_clicking() {
 
   (
     export YDOTOOL_SOCKET="$socket_path"
-    click_delay="$(click_delay)"
+    scroll_delay="$(scroll_delay)"
     while true; do
-      ydotool click 0xC0 >/dev/null 2>&1 || exit 1
-      sleep "$click_delay"
+      ydotool key "${down_key}:1" "${down_key}:0" >/dev/null 2>&1 || exit 1
+      sleep "$scroll_delay"
     done
   ) &
 
@@ -80,29 +81,29 @@ start_clicking() {
 }
 
 arm_z() {
-  if [[ -x "$HOME/.local/bin/autoscroll" ]]; then
-    "$HOME/.local/bin/autoscroll" off >/dev/null 2>&1 || true
+  if [[ -x "$HOME/.local/bin/autoclicker" ]]; then
+    "$HOME/.local/bin/autoclicker" off >/dev/null 2>&1 || true
   fi
 
-  hyprctl keyword bind ", z, exec, $script_path click-toggle" >/dev/null
+  hyprctl keyword bind ", z, exec, $script_path toggle" >/dev/null
   hyprctl keyword bind ", plus, exec, $script_path speed-up 1" >/dev/null
-  hyprctl keyword bind "CTRL, plus, exec, $script_path speed-up 10" >/dev/null
-  hyprctl keyword bind "SHIFT, plus, exec, $script_path speed-up 100" >/dev/null
+  hyprctl keyword bind "CTRL, plus, exec, $script_path speed-up 3" >/dev/null
+  hyprctl keyword bind "SHIFT, plus, exec, $script_path speed-up 10" >/dev/null
   hyprctl keyword bind ", minus, exec, $script_path speed-down 1" >/dev/null
-  hyprctl keyword bind "CTRL, minus, exec, $script_path speed-down 10" >/dev/null
-  hyprctl keyword bind "SHIFT, minus, exec, $script_path speed-down 100" >/dev/null
+  hyprctl keyword bind "CTRL, minus, exec, $script_path speed-down 3" >/dev/null
+  hyprctl keyword bind "SHIFT, minus, exec, $script_path speed-down 10" >/dev/null
   : > "$armed_file"
-  notify "z toggles clicking, +/- changes speed ($(read_speed)/s)"
+  notify "z toggles scrolling, +/- changes speed ($(read_speed)/s)"
 }
 
 disarm_z() {
   local notify_mode="${1:-always}"
-  local was_clicking=0
-  if is_clicking; then
-    was_clicking=1
+  local was_scrolling=0
+  if is_scrolling; then
+    was_scrolling=1
   fi
 
-  stop_clicking
+  stop_scrolling
   hyprctl keyword unbind ", z" >/dev/null || true
   hyprctl keyword unbind ", plus" >/dev/null || true
   hyprctl keyword unbind "CTRL, plus" >/dev/null || true
@@ -112,7 +113,7 @@ disarm_z() {
   hyprctl keyword unbind "SHIFT, minus" >/dev/null || true
   rm -f "$armed_file"
 
-  if [[ "$notify_mode" == "always" || "$was_clicking" == "1" ]]; then
+  if [[ "$notify_mode" == "always" || "$was_scrolling" == "1" ]]; then
     notify "z is normal again"
   fi
 }
@@ -128,12 +129,12 @@ speed_up() {
   speed=$((speed + amount))
   write_speed "$speed"
 
-  if is_clicking; then
-    stop_clicking
-    start_clicking
+  if is_scrolling; then
+    stop_scrolling
+    start_scrolling
   fi
 
-  notify "${speed} clicks/s"
+  notify "${speed} scrolls/s"
 }
 
 speed_down() {
@@ -150,15 +151,15 @@ speed_down() {
   fi
   write_speed "$speed"
 
-  if is_clicking; then
-    stop_clicking
-    start_clicking
+  if is_scrolling; then
+    stop_scrolling
+    start_scrolling
   fi
 
-  notify "${speed} clicks/s"
+  notify "${speed} scrolls/s"
 }
 
-case "${1:-}" in
+case "${1:-toggle}" in
   arm-toggle)
     if [[ -f "$armed_file" ]]; then
       disarm_z
@@ -166,13 +167,19 @@ case "${1:-}" in
       arm_z
     fi
     ;;
-  click-toggle)
-    if is_clicking; then
-      stop_clicking
-      notify "clicking stopped"
+  toggle)
+    if is_scrolling; then
+      stop_scrolling
+      notify "stopped"
     else
-      start_clicking
-      notify "clicking started"
+      start_scrolling
+      notify "started"
+    fi
+    ;;
+  on)
+    if ! is_scrolling; then
+      start_scrolling
+      notify "started"
     fi
     ;;
   off)
@@ -185,7 +192,7 @@ case "${1:-}" in
     speed_down "${2:-1}"
     ;;
   *)
-    printf 'Usage: %s {arm-toggle|click-toggle|off|speed-up AMOUNT|speed-down AMOUNT}\n' "${0##*/}" >&2
+    printf 'Usage: %s {arm-toggle|toggle|on|off|speed-up AMOUNT|speed-down AMOUNT}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

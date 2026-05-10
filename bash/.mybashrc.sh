@@ -199,10 +199,8 @@ function tf_sip() {
   nvim .
 }
 
-unalias nxb 2>/dev/null
 nxb() {
-  sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos &&
-    DISPLAY_MENU_QUIET=1 "$HOME/.local/bin/display-menu" apply-later
+  sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos
 }
 
 # Packs your whole project and copies it directly to your clipboard

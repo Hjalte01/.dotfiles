@@ -156,6 +156,11 @@ in
       executable = true;
     };
 
+    ".local/bin/autoscroll" = {
+      source = makeLink "scripts/autoscroll" ../scripts/autoscroll;
+      executable = true;
+    };
+
     ".local/bin/math-ocr" = {
       source = makeLink "scripts/math-ocr" ../scripts/math-ocr;
       executable = true;
@@ -281,6 +286,42 @@ in
     '';
   };
 
+  programs.qutebrowser = {
+    enable = true;
+
+    searchEngines = {
+      DEFAULT = "https://www.google.com/search?q={}";
+      g = "https://www.google.com/search?q={}";
+      ddg = "https://duckduckgo.com/?q={}";
+      nw = "https://wiki.nixos.org/index.php?search={}";
+      aw = "https://wiki.archlinux.org/?search={}";
+    };
+
+    settings = {
+      tabs.show = "multiple";
+      tabs.position = "top";
+      qt.args = [ "enable-smooth-scrolling" ];
+      scrolling.smooth = true;
+      content.autoplay = false;
+      downloads.location.directory = "~/Downloads";
+    };
+
+    keyBindings.normal = {
+      ",m" = "hint links spawn mpv {hint-url}";
+      ",M" = "spawn mpv {url}";
+    };
+
+    quickmarks = {
+      google = "https://google.com";
+      youtube = "https://youtube.com";
+      nixos = "https://wiki.nixos.org";
+    };
+  };
+
+
+  # Let Home Manager install and manage itself.
+  programs.home-manager.enable = true;
+
   # Enforce a global cursor theme to fix sizing/shape issues
   home.pointerCursor = {
     gtk.enable = true;
@@ -289,9 +330,6 @@ in
     package = pkgs.adwaita-icon-theme;
     size = 24;
   };
-
-  # Let Home Manager install and manage itself.
-  programs.home-manager.enable = true;
 
   # Don't change this without reading the Home Manager release notes!
   home.stateVersion = "23.11"; 

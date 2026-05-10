@@ -203,6 +203,11 @@
       "app.shield.optoutstudies.enabled" = false;
       "datareporting.healthreport.uploadEnabled" = false;
       "datareporting.policy.dataSubmissionEnabled" = false;
+      "general.autoScroll" = true;
+      "general.smoothScroll" = true;
+      "general.smoothScroll.lines" = true;
+      "general.smoothScroll.lines.durationMaxMS" = 300;
+      "general.smoothScroll.lines.durationMinMS" = 150;
       "toolkit.telemetry.archive.enabled" = false;
       "toolkit.telemetry.newProfilePing.enabled" = false;
       "toolkit.telemetry.shutdownPingSender.enabled" = false;
