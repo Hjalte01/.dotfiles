@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Define a temporary file for the screenshot
+tmp_img="/tmp/math_ocr.png"
+
+# 1. Freeze screen and let the user draw a box. 
+# If you press Escape to cancel, the script cleanly exits.
+grim -g "$(slurp)" "$tmp_img" || exit 1
+
+# 2. Notify the user that the AI is thinking (ML models take 1-2 seconds)
+notify-send "Math OCR" "Processing equation..." -t 2000
+
+# 3. Run pix2tex using the isolated, automatically-built python environment
+~/.local/share/pix2tex-venv/bin/pix2tex "$tmp_img" | wl-copy
+
+# 4. Clean up the temp image and notify success
+rm "$tmp_img"
+notify-send "Math OCR" "LaTeX copied to clipboard!"

@@ -132,6 +132,11 @@ in
       executable = true;
     };
 
+    ".local/bin/math-ocr" = {
+      source = makeLink "scripts/math-ocr" ../scripts/math-ocr;
+      executable = true;
+    };
+
     ".local/bin/notification-popups" = {
       source = makeLink "scripts/notification-popups" ../scripts/notification-popups;
       executable = true;
@@ -154,6 +159,10 @@ in
       source = makeLink "ghostty/.config/ghostty" ../ghostty/.config/ghostty;
       recursive = true;
     };
+
+    # Zathura
+    ".config/zathura/zathurarc".source = makeLink "zathura/zathurarc" ../zathura/zathurarc;
+
   };
 
   systemd.user.services.waybar = {
@@ -169,6 +178,27 @@ in
       RestartSec = 2;
     };
   };
+
+  # ==========================================
+  # AUTOMATED IMPERATIVE SETUP
+  # ==========================================
+  home.activation = {
+    setupPix2TexVenv = config.lib.dag.entryAfter ["writeBoundary"] ''
+      VENV_PATH="$HOME/.local/share/pix2tex-venv"
+      if [ ! -d "$VENV_PATH" ]; then
+        # Bypass systemd silencing by broadcasting directly to your terminal
+        ${pkgs.util-linux}/bin/wall "🤖 Home Manager: Downloading PyTorch for Math OCR. This takes 1-3 minutes. Do not cancel..."
+
+        run ${pkgs.python3}/bin/python3 -m venv "$VENV_PATH"
+        run "$VENV_PATH/bin/pip" install "pix2tex[gui]"
+
+        ${pkgs.util-linux}/bin/wall "✅ Math OCR Python environment built successfully!"
+      fi
+    '';
+  };
+
+
+
 
   xdg.mimeApps = {
     enable = true;
