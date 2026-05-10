@@ -14,8 +14,15 @@ cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
 state_file="$cache_dir/custom-keybinds-sort"
 used_file="$cache_dir/custom-keybinds-used"
 details_file="$cache_dir/custom-keybinds-details"
+added_cache_file="$cache_dir/custom-keybinds-added-cache"
+added_cache_meta="$cache_dir/custom-keybinds-added-cache-meta"
 
 mkdir -p "$cache_dir"
+
+rofi_args=()
+if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
+  rofi_args+=(--fullscreen)
+fi
 
 mode="added"
 if [[ -f "$state_file" ]]; then
@@ -28,6 +35,15 @@ fi
 if [[ "$mode" != "added" && "$mode" != "used" && "$mode" != "keybind" && "$mode" != "name" ]]; then
   mode="added"
 fi
+
+next_sort_mode() {
+  case "$1" in
+    added) printf '%s\n' "used" ;;
+    used) printf '%s\n' "keybind" ;;
+    keybind) printf '%s\n' "name" ;;
+    *) printf '%s\n' "added" ;;
+  esac
+}
 
 format_keybinds() {
   local source_file="${1:-$config}"
@@ -107,8 +123,51 @@ format_keybinds() {
   ' "$source_file"
 }
 
-git_added_keybinds() {
-  local repo_root config_rel tmp_history tmp_seen tmp_commit
+write_added_cache_meta() {
+  local repo_root="$1"
+  local config_rel="$2"
+  local head_hash="$3"
+
+  {
+    printf 'repo=%s\n' "$repo_root"
+    printf 'config=%s\n' "$config_rel"
+    printf 'head=%s\n' "$head_hash"
+  } > "$added_cache_meta"
+}
+
+read_added_cache_head() {
+  [[ -f "$added_cache_meta" ]] || return 1
+  awk -F= '$1 == "head" { print $2; exit }' "$added_cache_meta"
+}
+
+update_added_cache_from_range() {
+  local repo_root="$1"
+  local config_rel="$2"
+  local range="$3"
+  local tmp_commit tmp_seen
+
+  tmp_commit="$(mktemp)"
+  tmp_seen="$(mktemp)"
+
+  cut -f1 "$added_cache_file" 2>/dev/null | sort -u > "$tmp_seen"
+
+  while IFS=: read -r commit_time commit_hash; do
+    [[ -n "$commit_time" && -n "$commit_hash" ]] || continue
+    if git -C "$repo_root" show "$commit_hash:$config_rel" > "$tmp_commit" 2>/dev/null; then
+      format_keybinds "$tmp_commit" | cut -f3 | while IFS= read -r combo; do
+        [[ -n "$combo" ]] || continue
+        grep -Fxq "$combo" "$tmp_seen" && continue
+        printf '%s\t%s\n' "$combo" "$commit_time" >> "$added_cache_file"
+        printf '%s\n' "$combo" >> "$tmp_seen"
+      done
+    fi
+  done < <(git -C "$repo_root" log --reverse --format='%ct:%H' "$range" -- "$config_rel")
+
+  rm -f "$tmp_commit" "$tmp_seen"
+}
+
+refresh_added_cache() {
+  local repo_root config_rel head_hash cached_head cached_repo cached_config
 
   repo_root="$(git -C "$(dirname "$config")" rev-parse --show-toplevel 2>/dev/null || true)"
   [[ -n "$repo_root" ]] || return 1
@@ -116,21 +175,36 @@ git_added_keybinds() {
   config_rel="$(realpath --relative-to="$repo_root" "$config" 2>/dev/null || true)"
   [[ -n "$config_rel" && -f "$repo_root/$config_rel" ]] || return 1
 
-  tmp_history="$(mktemp)"
-  tmp_seen="$(mktemp)"
-  tmp_commit="$(mktemp)"
+  head_hash="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || true)"
+  [[ -n "$head_hash" ]] || return 1
 
-  cut -f3 "$details_file" | sort -u > "$tmp_seen"
+  cached_head="$(read_added_cache_head || true)"
+  cached_repo="$(awk -F= '$1 == "repo" { print $2; exit }' "$added_cache_meta" 2>/dev/null || true)"
+  cached_config="$(awk -F= '$1 == "config" { print $2; exit }' "$added_cache_meta" 2>/dev/null || true)"
 
-  while IFS=: read -r commit_time commit_hash; do
-    [[ -n "$commit_time" && -n "$commit_hash" ]] || continue
-    if git -C "$repo_root" show "$commit_hash:$config_rel" > "$tmp_commit" 2>/dev/null; then
-      format_keybinds "$tmp_commit" | cut -f3 | while IFS= read -r combo; do
-        grep -Fxq "$combo" "$tmp_seen" || continue
-        printf '%s\t%s\n' "$combo" "$commit_time"
-      done
-    fi
-  done < <(git -C "$repo_root" log --reverse --format='%ct:%H' -- "$config_rel") > "$tmp_history"
+  if [[ ! -s "$added_cache_file" || "$cached_repo" != "$repo_root" || "$cached_config" != "$config_rel" || -z "$cached_head" ]]; then
+    : > "$added_cache_file"
+    update_added_cache_from_range "$repo_root" "$config_rel" "HEAD"
+    write_added_cache_meta "$repo_root" "$config_rel" "$head_hash"
+    return
+  fi
+
+  if [[ "$cached_head" == "$head_hash" ]]; then
+    return
+  fi
+
+  if git -C "$repo_root" merge-base --is-ancestor "$cached_head" "$head_hash" 2>/dev/null; then
+    update_added_cache_from_range "$repo_root" "$config_rel" "$cached_head..HEAD"
+  else
+    : > "$added_cache_file"
+    update_added_cache_from_range "$repo_root" "$config_rel" "HEAD"
+  fi
+
+  write_added_cache_meta "$repo_root" "$config_rel" "$head_hash"
+}
+
+git_added_keybinds() {
+  refresh_added_cache || return 1
 
   awk -F '\t' '
     NR == FNR {
@@ -144,9 +218,7 @@ git_added_keybinds() {
       score = first[combo] ? first[combo] : 9999999999
       printf "%s\t%s\n", score, display
     }
-  ' "$tmp_history" "$details_file" | sort -rn | cut -f2-
-
-  rm -f "$tmp_history" "$tmp_seen" "$tmp_commit"
+  ' "$added_cache_file" "$details_file" | sort -rn | cut -f2-
 }
 
 ordered_keybinds() {
@@ -177,36 +249,19 @@ ordered_keybinds() {
 }
 
 while true; do
+  next_mode="$(next_sort_mode "$mode")"
   selection="$(
     {
-      printf '%s\n' "Sort: added"
-      printf '%s\n' "Sort: used"
-      printf '%s\n' "Sort: keybind"
-      printf '%s\n' "Sort: name"
+      printf 'Sort: %s (next: %s)\n' "$mode" "$next_mode"
       ordered_keybinds
-    } | rofi -dmenu -i -p "Keybinds ($mode)"
+    } | "$HOME/.local/bin/rofi-menu" "${rofi_args[@]}" -dmenu -i -p "Keybinds ($mode)"
   )"
 
   [[ -n "$selection" ]] || exit 0
 
   case "$selection" in
-    "Sort: added")
-      mode="added"
-      printf '%s\n' "$mode" > "$state_file"
-      continue
-      ;;
-    "Sort: used")
-      mode="used"
-      printf '%s\n' "$mode" > "$state_file"
-      continue
-      ;;
-    "Sort: keybind")
-      mode="keybind"
-      printf '%s\n' "$mode" > "$state_file"
-      continue
-      ;;
-    "Sort: name")
-      mode="name"
+    Sort:*)
+      mode="$next_mode"
       printf '%s\n' "$mode" > "$state_file"
       continue
       ;;

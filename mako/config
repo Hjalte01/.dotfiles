@@ -1,5 +1,6 @@
 default-timeout=3000
 max-visible=5
+max-history=10
 sort=-time
 
 background-color=#1e1e2e

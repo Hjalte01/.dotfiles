@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+history="$(
+  {
+    makoctl list -j 2>/dev/null || printf '[]\n'
+    makoctl history -j 2>/dev/null || printf '[]\n'
+  } | jq -rs '
+    [
+      .. | objects
+      | select(((.summary? // "") != "") or ((.body? // "") != ""))
+      | {
+          app: (."app-name"? // .app_name? // .app? // "notification"),
+          summary: (.summary? // ""),
+          body: (.body? // "")
+        }
+    ]
+    | reduce .[] as $item ([];
+        if any(.[]; .app == $item.app and .summary == $item.summary and .body == $item.body) then
+          .
+        else
+          . + [$item]
+        end
+      )
+    | .[:10]
+    | .[]
+    | if (.body | length) > 0 then
+        "\(.summary) - \(.body)"
+      else
+        .summary
+      end
+  '
+)"
+
+if [[ -z "$history" ]]; then
+  notify-send "Notifications" "No notification history"
+  exit 0
+fi
+
+rofi_args=()
+if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
+  rofi_args+=(--fullscreen)
+fi
+
+printf '%s\n' "$history" | "$HOME/.local/bin/rofi-menu" "${rofi_args[@]}" -dmenu -i -p "Notifications"

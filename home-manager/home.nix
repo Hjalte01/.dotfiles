@@ -22,7 +22,10 @@ in
     ripgrep      # LazyVim needs this
     fd           # LazyVim needs this
     gcc          # Needed for Treesitter
+    stdenv.cc.cc.lib # Runtime libstdc++ for Python ML wheels
+    zlib         # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
+    cliphist     # Clipboard history
     imv          # billedeviser til wayland
     mpv          # videoafspilere
     zathura      # PDF/document viewer
@@ -41,6 +44,7 @@ in
 
     ghostty      # Terminal
     tree-sitter  # Nvim needs it
+    python311      # Runtime for pix2tex venv used by math-ocr
     nodejs_22    # required by mason
     unzip        # required by mason
     curl
@@ -127,6 +131,16 @@ in
       executable = true;
     };
 
+    ".local/bin/rofi-menu" = {
+      source = makeLink "scripts/rofi-menu" ../scripts/rofi-menu;
+      executable = true;
+    };
+
+    ".local/bin/desktop-reload" = {
+      source = makeLink "scripts/desktop-reload" ../scripts/desktop-reload;
+      executable = true;
+    };
+
     ".local/bin/autoclicker" = {
       source = makeLink "scripts/autoclicker" ../scripts/autoclicker;
       executable = true;
@@ -137,8 +151,22 @@ in
       executable = true;
     };
 
+    ".local/share/math-ocr/env".text = ''
+      export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib:''${LD_LIBRARY_PATH:-}"
+    '';
+
     ".local/bin/notification-popups" = {
       source = makeLink "scripts/notification-popups" ../scripts/notification-popups;
+      executable = true;
+    };
+
+    ".local/bin/clipboard-history" = {
+      source = makeLink "scripts/clipboard-history" ../scripts/clipboard-history;
+      executable = true;
+    };
+
+    ".local/bin/notification-history" = {
+      source = makeLink "scripts/notification-history" ../scripts/notification-history;
       executable = true;
     };
 
@@ -179,26 +207,37 @@ in
     };
   };
 
-  # ==========================================
-  # AUTOMATED IMPERATIVE SETUP
-  # ==========================================
-  home.activation = {
-    setupPix2TexVenv = config.lib.dag.entryAfter ["writeBoundary"] ''
-      VENV_PATH="$HOME/.local/share/pix2tex-venv"
-      if [ ! -d "$VENV_PATH" ]; then
-        # Bypass systemd silencing by broadcasting directly to your terminal
-        ${pkgs.util-linux}/bin/wall "🤖 Home Manager: Downloading PyTorch for Math OCR. This takes 1-3 minutes. Do not cancel..."
+  systemd.user.services.cliphist-text = {
+    Unit = {
+      Description = "Clipboard history watcher for text";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
 
-        run ${pkgs.python3}/bin/python3 -m venv "$VENV_PATH"
-        run "$VENV_PATH/bin/pip" install "pix2tex[gui]"
+    Service = {
+      ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store";
+      Restart = "always";
+      RestartSec = 2;
+    };
 
-        ${pkgs.util-linux}/bin/wall "✅ Math OCR Python environment built successfully!"
-      fi
-    '';
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
+  systemd.user.services.cliphist-image = {
+    Unit = {
+      Description = "Clipboard history watcher for images";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
 
+    Service = {
+      ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store";
+      Restart = "always";
+      RestartSec = 2;
+    };
 
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
 
   xdg.mimeApps = {
     enable = true;
@@ -209,6 +248,12 @@ in
       "video/mp4" = [ "mpv.desktop" ];
       "video/webm" = [ "mpv.desktop" ];
       "video/x-matroska" = [ "mpv.desktop" ];
+      "text/html" = [ "firefox.desktop" ];
+      "application/xhtml+xml" = [ "firefox.desktop" ];
+      "x-scheme-handler/about" = [ "firefox.desktop" ];
+      "x-scheme-handler/http" = [ "firefox.desktop" ];
+      "x-scheme-handler/https" = [ "firefox.desktop" ];
+      "x-scheme-handler/unknown" = [ "firefox.desktop" ];
       "application/pdf" = [ "firefox.desktop" ]; # Eksempel: Åbn PDF i Firefox
     };
   };

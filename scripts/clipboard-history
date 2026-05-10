@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! history="$(cliphist list 2>/dev/null)" || [[ -z "$history" ]]; then
+  notify-send "Clipboard" "No clipboard history yet"
+  exit 0
+fi
+
+rofi_args=()
+if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
+  rofi_args+=(--fullscreen)
+fi
+
+selection="$(printf '%s\n' "$history" | "$HOME/.local/bin/rofi-menu" "${rofi_args[@]}" -dmenu -i -p "Clipboard")"
+
+if [[ -n "$selection" ]]; then
+  printf '%s' "$selection" | cliphist decode | wl-copy
+  notify-send "Clipboard" "Copied selected history item"
+fi

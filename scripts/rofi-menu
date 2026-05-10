@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+input_file=""
+is_dmenu=false
+size="compact"
+args=()
+
+for arg in "$@"; do
+  case "$arg" in
+    --fullscreen)
+      size="fullscreen"
+      ;;
+    --compact)
+      size="compact"
+      ;;
+    -dmenu)
+      is_dmenu=true
+      args+=("$arg")
+      ;;
+    *)
+      args+=("$arg")
+      ;;
+  esac
+done
+
+if [[ "$is_dmenu" == true && ! -t 0 ]]; then
+  input_file="$(mktemp)"
+  cat > "$input_file"
+fi
+
+cleanup() {
+  [[ -n "$input_file" ]] && rm -f "$input_file"
+}
+trap cleanup EXIT
+
+theme_for_size() {
+  case "$size" in
+    fullscreen)
+      printf '%s\n' '#window { fullscreen: true; } #listview { lines: 20; }'
+      ;;
+    *)
+      printf '%s\n' '#window { fullscreen: false; width: 35%; } #listview { lines: 8; }'
+      ;;
+  esac
+}
+
+if [[ -n "$input_file" ]]; then
+  rofi "${args[@]}" -input "$input_file" -theme-str "$(theme_for_size)"
+else
+  rofi "${args[@]}" -theme-str "$(theme_for_size)"
+fi
