@@ -37,6 +37,7 @@ PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 # 3. CLIPBOARD (Wayland)
 # ==========================================
 alias c='wl-copy'
+alias p='wl-paste'
 alias v='wl-paste'
 
 # ==========================================
@@ -198,8 +199,11 @@ function tf_sip() {
   nvim .
 }
 
-# Rebuild nixos flake build
-alias nxb="sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos"
+unalias nxb 2>/dev/null
+nxb() {
+  sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos &&
+    DISPLAY_MENU_QUIET=1 "$HOME/.local/bin/display-menu" apply-later
+}
 
 # Packs your whole project and copies it directly to your clipboard
 alias sharecode="npx repomix --copy && rm repomix-output.* 2>/dev/null"

@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+internal="${DISPLAY_MENU_INTERNAL:-eDP-1}"
+internal_scale="${DISPLAY_MENU_INTERNAL_SCALE:-1.25}"
+external_scale="${DISPLAY_MENU_EXTERNAL_SCALE:-1}"
+menu_bin="${DISPLAY_MENU_ROFI:-$HOME/.local/bin/rofi-menu}"
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/display-menu"
+profile_file="$state_dir/profile"
+rofi_args=()
+
+if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
+  rofi_args+=(--fullscreen)
+fi
+
+notify() {
+  [[ "${DISPLAY_MENU_QUIET:-0}" == "1" ]] && return 0
+  notify-send "Display mode" "$1" -t 2500 || true
+}
+
+fail() {
+  notify "$1"
+  printf '%s\n' "$1" >&2
+  exit 1
+}
+
+save_profile() {
+  mkdir -p "$state_dir"
+  printf '%s\n' "$@" > "$profile_file"
+}
+
+monitors_json="$(hyprctl monitors all -j)" || fail "Could not read monitors from Hyprland"
+
+connected_names="$(
+  jq -r '.[].name' <<<"$monitors_json"
+)"
+
+is_connected() {
+  grep -Fxq "$1" <<<"$connected_names"
+}
+
+external_names="$(
+  jq -r --arg internal "$internal" '.[] | select(.name != $internal) | .name' <<<"$monitors_json"
+)"
+
+active_count() {
+  hyprctl monitors -j | jq 'length'
+}
+
+is_active() {
+  local output="$1"
+
+  hyprctl monitors -j | jq -e --arg output "$output" 'any(.[]; .name == $output)' >/dev/null
+}
+
+enable_internal() {
+  if is_connected "$internal"; then
+    hyprctl keyword monitor "$internal, preferred, auto, $internal_scale" >/dev/null
+  fi
+}
+
+enable_external() {
+  local output="$1"
+  hyprctl keyword monitor "$output, preferred, auto-left, $external_scale" >/dev/null
+}
+
+disable_output() {
+  local output="$1"
+  local count
+
+  is_active "$output" || return 0
+
+  count="$(active_count)"
+  if ((count <= 1)); then
+    fail "Refusing to disable $output because it is the only active display"
+  fi
+
+  hyprctl keyword monitor "$output, disable" >/dev/null
+}
+
+normal_mode() {
+  local output
+
+  enable_internal
+  while IFS= read -r output; do
+    [[ -z "$output" ]] && continue
+    enable_external "$output"
+  done <<<"$external_names"
+
+  save_profile "normal"
+  notify "Normal extended layout"
+}
+
+laptop_only() {
+  local output
+
+  is_connected "$internal" || fail "$internal is not connected"
+  enable_internal
+
+  while IFS= read -r output; do
+    [[ -z "$output" ]] && continue
+    disable_output "$output"
+  done <<<"$external_names"
+
+  save_profile "laptop-only"
+  notify "Laptop screen only"
+}
+
+external_only() {
+  local output="$1"
+
+  [[ -n "$output" ]] || fail "No external display connected"
+  enable_external "$output"
+
+  if is_connected "$internal"; then
+    disable_output "$internal"
+  fi
+
+  save_profile "external-only" "$output"
+  notify "$output only"
+}
+
+mirror_to_external() {
+  local output="$1"
+  local other
+
+  [[ -n "$output" ]] || fail "No external display connected"
+  is_connected "$internal" || fail "$internal is not connected"
+
+  enable_internal
+  hyprctl keyword monitor "$output, preferred, auto, $external_scale, mirror, $internal" >/dev/null
+
+  while IFS= read -r other; do
+    [[ -z "$other" || "$other" == "$output" ]] && continue
+    disable_output "$other"
+  done <<<"$external_names"
+
+  save_profile "mirror" "$output"
+  notify "Mirroring $internal to $output"
+}
+
+apply_saved_profile() {
+  local mode output
+  local -a saved_profile
+
+  [[ -f "$profile_file" ]] || exit 0
+  mapfile -t saved_profile < "$profile_file"
+  mode="${saved_profile[0]:-}"
+  output="${saved_profile[1]:-}"
+
+  case "$mode" in
+    normal)
+      normal_mode
+      ;;
+    laptop-only)
+      laptop_only
+      ;;
+    external-only)
+      external_only "$output"
+      ;;
+    mirror)
+      mirror_to_external "$output"
+      ;;
+    *)
+      fail "Unknown saved display mode: $mode"
+      ;;
+  esac
+}
+
+apply_saved_profile_later() {
+  local delay
+
+  apply_saved_profile
+
+  for delay in 1 3; do
+    (
+      sleep "$delay"
+      DISPLAY_MENU_QUIET=1 "$0" apply
+    ) >/dev/null 2>&1 &
+  done
+}
+
+case "${1:-menu}" in
+  apply|restore)
+    apply_saved_profile
+    exit 0
+    ;;
+  apply-later|restore-later)
+    apply_saved_profile_later
+    exit 0
+    ;;
+  menu)
+    ;;
+  *)
+    printf 'Usage: %s [menu|apply|restore|apply-later|restore-later]\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac
+
+options=("Normal extended layout")
+
+if is_connected "$internal"; then
+  options+=("Laptop screen only")
+fi
+
+while IFS= read -r output; do
+  [[ -z "$output" ]] && continue
+  options+=("External only: $output")
+  if is_connected "$internal"; then
+    options+=("Duplicate laptop to: $output")
+  fi
+done <<<"$external_names"
+
+selection="$(
+  printf '%s\n' "${options[@]}" | "$menu_bin" "${rofi_args[@]}" -dmenu -i -p "Display mode"
+)"
+
+case "$selection" in
+  "Normal extended layout")
+    normal_mode
+    ;;
+  "Laptop screen only")
+    laptop_only
+    ;;
+  "External only: "*)
+    external_only "${selection#External only: }"
+    ;;
+  "Duplicate laptop to: "*)
+    mirror_to_external "${selection#Duplicate laptop to: }"
+    ;;
+esac

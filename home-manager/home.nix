@@ -74,7 +74,7 @@ in
     btop        # Your system monitor
     lazygit     # Your git manager
     lazydocker  # Your docker manager
-    wlr-randr   # Required by your display toggle bind
+    wlr-randr   # Useful for manual display checks
     blueman     # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
 
     # For Fn-keys
@@ -138,6 +138,16 @@ in
 
     ".local/bin/desktop-reload" = {
       source = makeLink "scripts/desktop-reload" ../scripts/desktop-reload;
+      executable = true;
+    };
+
+    ".local/bin/waybar-toggle" = {
+      source = makeLink "scripts/waybar-toggle" ../scripts/waybar-toggle;
+      executable = true;
+    };
+
+    ".local/bin/display-menu" = {
+      source = makeLink "scripts/display-menu" ../scripts/display-menu;
       executable = true;
     };
 

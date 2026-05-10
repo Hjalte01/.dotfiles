@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+service="waybar.service"
+
+if systemctl --user is-active --quiet "$service"; then
+  systemctl --user stop "$service"
+else
+  systemctl --user start "$service"
+fi

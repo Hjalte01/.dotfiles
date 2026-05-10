@@ -22,6 +22,7 @@ run_step() {
 run_step "systemd user daemon" systemctl --user daemon-reload
 run_step "Wayland environment" systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE DISPLAY
 run_step "Hyprland config" hyprctl reload
+run_step "display mode" env DISPLAY_MENU_QUIET=1 /home/hjalte/.local/bin/display-menu apply-later
 run_step "Waybar" systemctl --user restart waybar.service
 run_step "clipboard history" systemctl --user restart cliphist-text.service cliphist-image.service
 

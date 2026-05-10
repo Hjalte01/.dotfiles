@@ -190,8 +190,26 @@
     ];
   };
 
-  # Install firefox.
-  programs.firefox.enable = true;
+  # Install Firefox. Disable telemetry/studies to reduce crash-prone background
+  # paths and avoid remotely changing browser behavior between rebuilds.
+  programs.firefox = {
+    enable = true;
+    policies = {
+      DisableTelemetry = true;
+      DisableFirefoxStudies = true;
+      DisableFeedbackCommands = true;
+    };
+    preferences = {
+      "app.shield.optoutstudies.enabled" = false;
+      "datareporting.healthreport.uploadEnabled" = false;
+      "datareporting.policy.dataSubmissionEnabled" = false;
+      "toolkit.telemetry.archive.enabled" = false;
+      "toolkit.telemetry.newProfilePing.enabled" = false;
+      "toolkit.telemetry.shutdownPingSender.enabled" = false;
+      "toolkit.telemetry.unified" = false;
+      "toolkit.telemetry.updatePing.enabled" = false;
+    };
+  };
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
