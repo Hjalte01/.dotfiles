@@ -3,10 +3,35 @@ set -euo pipefail
 
 mode="do-not-disturb"
 
-makoctl mode -t "$mode"
+is_disabled() {
+  makoctl mode | grep -Fxq "$mode"
+}
 
-if makoctl mode | grep -Fxq "$mode"; then
-  makoctl dismiss --all
-else
-  notify-send "Notification popups" "Enabled"
-fi
+case "${1:-toggle}" in
+  off)
+    makoctl mode -a "$mode"
+    makoctl dismiss --all
+    ;;
+  on)
+    makoctl mode -r "$mode"
+    notify-send "Notification popups" "Enabled"
+    ;;
+  status)
+    if is_disabled; then
+      printf '%s\n' "off"
+    else
+      printf '%s\n' "on"
+    fi
+    ;;
+  toggle)
+    if is_disabled; then
+      "$0" on
+    else
+      "$0" off
+    fi
+    ;;
+  *)
+    printf 'Usage: %s {toggle|on|off|status}\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac
