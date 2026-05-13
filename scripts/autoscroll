@@ -6,11 +6,13 @@ persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}/autoscroll"
 state_dir="$runtime_dir/autoscroll"
 armed_file="$state_dir/z-armed"
 pid_file="$state_dir/autoscroll.pid"
+direction_file="$state_dir/direction"
 speed_file="$persist_dir/scrolls-per-second"
 socket_path="/run/ydotoold/socket"
 script_path="$HOME/.local/bin/autoscroll"
 default_speed="6"
 down_key="${AUTOSCROLL_KEY:-108}"
+up_key="${AUTOSCROLL_UP_KEY:-103}"
 
 mkdir -p "$state_dir"
 mkdir -p "$persist_dir"
@@ -55,9 +57,18 @@ stop_scrolling() {
     kill "$pid" 2>/dev/null || true
   fi
   rm -f "$pid_file"
+  rm -f "$direction_file"
 }
 
 start_scrolling() {
+  local direction="${1:-down}"
+  local key="$down_key"
+  if [[ "$direction" == "up" ]]; then
+    key="$up_key"
+  else
+    direction="down"
+  fi
+
   if ! command -v ydotool >/dev/null 2>&1; then
     notify "ydotool is not installed. Rebuild Home Manager first."
     exit 1
@@ -72,12 +83,42 @@ start_scrolling() {
     export YDOTOOL_SOCKET="$socket_path"
     scroll_delay="$(scroll_delay)"
     while true; do
-      ydotool key "${down_key}:1" "${down_key}:0" >/dev/null 2>&1 || exit 1
+      ydotool key "${key}:1" "${key}:0" >/dev/null 2>&1 || exit 1
       sleep "$scroll_delay"
     done
   ) &
 
   printf '%s\n' "$!" > "$pid_file"
+  printf '%s\n' "$direction" > "$direction_file"
+}
+
+current_direction() {
+  local direction="down"
+  if [[ -f "$direction_file" ]]; then
+    IFS= read -r direction < "$direction_file" || direction="down"
+  fi
+
+  if [[ "$direction" != "up" ]]; then
+    direction="down"
+  fi
+
+  printf '%s\n' "$direction"
+}
+
+toggle_scrolling() {
+  local direction="${1:-down}"
+  if [[ "$direction" != "up" ]]; then
+    direction="down"
+  fi
+
+  if is_scrolling && [[ "$(current_direction)" == "$direction" ]]; then
+    stop_scrolling
+    notify "stopped"
+  else
+    stop_scrolling
+    start_scrolling "$direction"
+    notify "started ${direction}"
+  fi
 }
 
 arm_z() {
@@ -86,6 +127,7 @@ arm_z() {
   fi
 
   hyprctl keyword bind ", z, exec, $script_path toggle" >/dev/null
+  hyprctl keyword bind ", a, exec, $script_path toggle-up" >/dev/null
   hyprctl keyword bind ", plus, exec, $script_path speed-up 1" >/dev/null
   hyprctl keyword bind "CTRL, plus, exec, $script_path speed-up 3" >/dev/null
   hyprctl keyword bind "SHIFT, plus, exec, $script_path speed-up 10" >/dev/null
@@ -93,7 +135,7 @@ arm_z() {
   hyprctl keyword bind "CTRL, minus, exec, $script_path speed-down 3" >/dev/null
   hyprctl keyword bind "SHIFT, minus, exec, $script_path speed-down 10" >/dev/null
   : > "$armed_file"
-  notify "z toggles scrolling, +/- changes speed ($(read_speed)/s)"
+  notify "z scrolls down, a scrolls up, +/- changes speed ($(read_speed)/s)"
 }
 
 disarm_z() {
@@ -105,6 +147,7 @@ disarm_z() {
 
   stop_scrolling
   hyprctl keyword unbind ", z" >/dev/null || true
+  hyprctl keyword unbind ", a" >/dev/null || true
   hyprctl keyword unbind ", plus" >/dev/null || true
   hyprctl keyword unbind "CTRL, plus" >/dev/null || true
   hyprctl keyword unbind "SHIFT, plus" >/dev/null || true
@@ -130,8 +173,10 @@ speed_up() {
   write_speed "$speed"
 
   if is_scrolling; then
+    local direction
+    direction="$(current_direction)"
     stop_scrolling
-    start_scrolling
+    start_scrolling "$direction"
   fi
 
   notify "${speed} scrolls/s"
@@ -152,8 +197,10 @@ speed_down() {
   write_speed "$speed"
 
   if is_scrolling; then
+    local direction
+    direction="$(current_direction)"
     stop_scrolling
-    start_scrolling
+    start_scrolling "$direction"
   fi
 
   notify "${speed} scrolls/s"
@@ -168,17 +215,14 @@ case "${1:-toggle}" in
     fi
     ;;
   toggle)
-    if is_scrolling; then
-      stop_scrolling
-      notify "stopped"
-    else
-      start_scrolling
-      notify "started"
-    fi
+    toggle_scrolling down
+    ;;
+  toggle-up)
+    toggle_scrolling up
     ;;
   on)
     if ! is_scrolling; then
-      start_scrolling
+      start_scrolling down
       notify "started"
     fi
     ;;
@@ -192,7 +236,7 @@ case "${1:-toggle}" in
     speed_down "${2:-1}"
     ;;
   *)
-    printf 'Usage: %s {arm-toggle|toggle|on|off|speed-up AMOUNT|speed-down AMOUNT}\n' "${0##*/}" >&2
+    printf 'Usage: %s {arm-toggle|toggle|toggle-up|on|off|speed-up AMOUNT|speed-down AMOUNT}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

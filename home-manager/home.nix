@@ -287,7 +287,8 @@ in
   };
 
   programs.qutebrowser = {
-    enable = true;
+    # enable = true;
+    enable = false;
 
     searchEngines = {
       DEFAULT = "https://www.google.com/search?q={}";
