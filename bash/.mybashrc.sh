@@ -165,11 +165,26 @@ function ts_enable() {
   fi
 }
 
-# Fuzzy-find history and copy the selected command to the clipboard
+# Fuzzy-find shell history. Enter inserts the command, Ctrl-y copies it.
 history() {
-  # This function avoids the complex quoting issues of an alias.
-  builtin history | tac | fzf --bind 'enter:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
+  local selected
+  selected="$(
+    builtin history |
+      tac |
+      fzf --bind 'ctrl-y:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
+  )" || return
+
+  printf '%s\n' "$selected" | awk '{$1=""; sub(/^ /, ""); print}'
 }
+
+history_insert() {
+  local selected
+  selected="$(history)" || return
+  READLINE_LINE="$selected"
+  READLINE_POINT="${#READLINE_LINE}"
+}
+
+bind -x '"\C-h": history_insert'
 
 # testt to see if ssh-agent and ssh-add is needed before adding
 # --- SSH AGENT AUTOSTART ---
@@ -199,8 +214,12 @@ function tf_sip() {
   nvim .
 }
 
-nxb() {
+nxb_old() {
   sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos
+}
+
+nxb() {
+  nh os switch ~/.dotfiles#nixos
 }
 
 # Packs your whole project and copies it directly to your clipboard

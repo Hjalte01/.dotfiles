@@ -53,6 +53,10 @@ in
     fzf
     zoxide      # Smart/frecency directory jumping
     xdg-utils   # Provides xdg-open for the open alias
+    nh           # Friendly NixOS/Home Manager rebuild wrapper
+    nix-output-monitor # Readable Nix build output
+    alejandra    # Nix formatter
+    nixd         # Nix language server
     
     glow
     tree
