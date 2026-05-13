@@ -141,6 +141,11 @@ in
       executable = true;
     };
 
+    ".local/bin/battery-alert" = {
+      source = makeLink "scripts/battery-alert" ../scripts/battery-alert;
+      executable = true;
+    };
+
     ".local/bin/waybar-toggle" = {
       source = makeLink "scripts/waybar-toggle" ../scripts/waybar-toggle;
       executable = true;
@@ -220,6 +225,22 @@ in
       Restart = "always";
       RestartSec = 2;
     };
+  };
+
+  systemd.user.services.battery-alert = {
+    Unit = {
+      Description = "Battery threshold notifications";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+
+    Service = {
+      ExecStart = "%h/.local/bin/battery-alert";
+      Restart = "always";
+      RestartSec = 2;
+    };
+
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   systemd.user.services.cliphist-text = {

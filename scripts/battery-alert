@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -u
+
+SUPPLY_DIR="${BATTERY_ALERT_SUPPLY_DIR:-/sys/class/power_supply}"
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/battery-alert"
+INTERVAL_SECONDS="${BATTERY_ALERT_INTERVAL_SECONDS:-30}"
+
+mkdir -p "$STATE_DIR"
+
+read_battery() {
+  local found=0
+  local selected_capacity=101
+  local selected_status="Unknown"
+  local battery capacity status
+
+  shopt -s nullglob
+  for battery in "$SUPPLY_DIR"/BAT*; do
+    [[ -r "$battery/capacity" ]] || continue
+
+    found=1
+    capacity="$(<"$battery/capacity")"
+    status="Unknown"
+    [[ -r "$battery/status" ]] && status="$(<"$battery/status")"
+
+    if [[ "$status" == "Discharging" && "$capacity" -lt "$selected_capacity" ]]; then
+      selected_capacity="$capacity"
+      selected_status="$status"
+    elif [[ "$selected_status" != "Discharging" && "$capacity" -lt "$selected_capacity" ]]; then
+      selected_capacity="$capacity"
+      selected_status="$status"
+    fi
+  done
+  shopt -u nullglob
+
+  [[ "$found" == "1" ]] || return 1
+  printf '%s %s\n' "$selected_capacity" "$selected_status"
+}
+
+send_alert() {
+  local threshold="$1"
+  local capacity="$2"
+  local title body
+
+  if [[ "$threshold" == "5" ]]; then
+    title="Battery critically low"
+    body="Battery is at ${capacity}%. Plug in power now."
+  else
+    title="Battery low"
+    body="Battery is at ${capacity}%."
+  fi
+
+  notify-send -a "Battery" -u critical -t 0 "$title" "$body" >/dev/null 2>&1 || true
+}
+
+check_battery() {
+  local battery_info capacity status
+
+  battery_info="$(read_battery)" || return 0
+  capacity="${battery_info%% *}"
+  status="${battery_info#* }"
+
+  if [[ "$status" != "Discharging" ]]; then
+    rm -f "$STATE_DIR/sent-20" "$STATE_DIR/sent-5"
+    return 0
+  fi
+
+  if [[ "$capacity" -le 5 && ! -e "$STATE_DIR/sent-5" ]]; then
+    send_alert 5 "$capacity"
+    touch "$STATE_DIR/sent-20" "$STATE_DIR/sent-5"
+  elif [[ "$capacity" -le 20 && ! -e "$STATE_DIR/sent-20" ]]; then
+    send_alert 20 "$capacity"
+    touch "$STATE_DIR/sent-20"
+  elif [[ "$capacity" -gt 20 ]]; then
+    rm -f "$STATE_DIR/sent-20" "$STATE_DIR/sent-5"
+  fi
+}
+
+if [[ "${1:-}" == "--once" ]]; then
+  check_battery
+  exit 0
+fi
+
+while true; do
+  check_battery
+  sleep "$INTERVAL_SECONDS"
+done
