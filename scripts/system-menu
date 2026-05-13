@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+menu_bin="${SYSTEM_MENU_ROFI:-$HOME/.local/bin/rofi-menu}"
+rofi_args=()
+
+if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
+  rofi_args+=(--fullscreen)
+fi
+
+notify() {
+  notify-send "System menu" "$1" -t 2500 || true
+}
+
+selection="$(
+  printf '%s\n' \
+    "Hibernate" \
+    "Sleep" \
+    "Restart" \
+    "Logout" \
+    "Shutdown" |
+    "$menu_bin" "${rofi_args[@]}" -dmenu -i -p "System"
+)"
+
+case "$selection" in
+  Hibernate)
+    systemctl hibernate
+    ;;
+  Sleep)
+    systemctl suspend
+    ;;
+  Restart)
+    systemctl reboot
+    ;;
+  Logout)
+    hyprctl dispatch exit
+    ;;
+  Shutdown)
+    systemctl poweroff
+    ;;
+  "")
+    exit 0
+    ;;
+  *)
+    notify "Unknown action: $selection"
+    exit 1
+    ;;
+esac

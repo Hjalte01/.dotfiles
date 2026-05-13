@@ -156,6 +156,11 @@ in
       executable = true;
     };
 
+    ".local/bin/system-menu" = {
+      source = makeLink "scripts/system-menu" ../scripts/system-menu;
+      executable = true;
+    };
+
     ".local/bin/autoclicker" = {
       source = makeLink "scripts/autoclicker" ../scripts/autoclicker;
       executable = true;

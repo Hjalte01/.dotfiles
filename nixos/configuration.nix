@@ -78,7 +78,7 @@
   };
 
   # The physical power button is handled by acpid below so it requires two
-  # separate presses within three seconds instead of shutting down immediately.
+  # separate presses within three seconds instead of hibernating immediately.
   services.logind.settings.Login = {
     HandlePowerKey = "ignore";
     HandlePowerKeyLongPress = "ignore";
@@ -99,26 +99,26 @@
           ${pkgs.systemd}/bin/systemd-cat -t power-button-confirm echo "$1"
         }
 
-        arm_shutdown() {
+        arm_hibernate() {
           ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
           printf '%s\n' "$now" > "$state_file"
-          log "Shutdown armed. Press the power button again within 3 seconds to shut down."
+          log "Hibernate armed. Press the power button again within 3 seconds to hibernate."
         }
 
         if [ ! -f "$state_file" ]; then
-          arm_shutdown
+          arm_hibernate
           exit 0
         fi
 
         armed_at="$(${pkgs.coreutils}/bin/cat "$state_file" 2>/dev/null || true)"
         if [ -z "$armed_at" ]; then
-          arm_shutdown
+          arm_hibernate
           exit 0
         fi
 
         case "$armed_at" in
           *[!0-9]*)
-            arm_shutdown
+            arm_hibernate
             exit 0
             ;;
         esac
@@ -132,12 +132,12 @@
 
         if [ "$elapsed_ms" -le "$confirm_window_ms" ]; then
           ${pkgs.coreutils}/bin/rm -f "$state_file"
-          log "Confirmed shutdown from second power-button press."
-          ${pkgs.systemd}/bin/systemctl poweroff
+          log "Confirmed hibernate from second power-button press."
+          ${pkgs.systemd}/bin/systemctl hibernate
           exit 0
         fi
 
-        arm_shutdown
+        arm_hibernate
       '';
     };
   };
