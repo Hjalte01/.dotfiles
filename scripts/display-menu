@@ -2,7 +2,7 @@
 set -euo pipefail
 
 internal="${DISPLAY_MENU_INTERNAL:-eDP-1}"
-internal_scale="${DISPLAY_MENU_INTERNAL_SCALE:-1.25}"
+internal_scale="${DISPLAY_MENU_INTERNAL_SCALE:-1}"
 external_scale="${DISPLAY_MENU_EXTERNAL_SCALE:-1}"
 menu_bin="${DISPLAY_MENU_ROFI:-$HOME/.local/bin/rofi-menu}"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/display-menu"

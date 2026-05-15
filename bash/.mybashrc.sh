@@ -165,8 +165,7 @@ function ts_enable() {
   fi
 }
 
-# Fuzzy-find shell history. Enter inserts the command, Ctrl-y copies it.
-history() {
+history_pick() {
   local selected
   selected="$(
     builtin history |
@@ -177,9 +176,18 @@ history() {
   printf '%s\n' "$selected" | awk '{$1=""; sub(/^ /, ""); print}'
 }
 
+# Fuzzy-find shell history. Enter copies the command and prints it.
+history() {
+  local selected
+  selected="$(history_pick)" || return
+  printf '%s' "$selected" | wl-copy >/dev/null 2>&1 || true
+  printf '%s\n' "$selected"
+}
+
 history_insert() {
   local selected
-  selected="$(history)" || return
+  selected="$(history_pick)" || return
+  printf '%s' "$selected" | wl-copy >/dev/null 2>&1 || true
   READLINE_LINE="$selected"
   READLINE_POINT="${#READLINE_LINE}"
 }

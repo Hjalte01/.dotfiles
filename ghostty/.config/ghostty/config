@@ -22,3 +22,8 @@ mouse-scroll-multiplier = 0.95
 # Trying to fix ghostty crash
 gtk-single-instance = true 
 window-decoration = false
+
+# Clipboard shortcuts. Ctrl+C only copies when text is selected; otherwise it
+# still reaches the shell as interrupt.
+keybind = performable:ctrl+c=copy_to_clipboard:mixed
+keybind = ctrl+v=paste_from_clipboard
