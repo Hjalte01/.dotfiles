@@ -41,6 +41,16 @@ entry {
     text-color: #cdd6f4; /* Bright White/Gray for the text you type */
 }
 
+message {
+    padding: 10px 12px 0 12px;
+    background-color: transparent;
+}
+
+message textbox {
+    background-color: transparent;
+    text-color: #ffffff;
+}
+
 listview {
     lines: 8;
     margin: 15px 0 0 0;

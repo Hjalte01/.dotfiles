@@ -20,6 +20,7 @@ added_cache_meta="$cache_dir/custom-keybinds-added-cache-meta"
 mkdir -p "$cache_dir"
 
 rofi_args=()
+rofi_args+=(-matching fuzzy)
 if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
   rofi_args+=(--fullscreen)
 fi
@@ -248,12 +249,38 @@ ordered_keybinds() {
   rm -f "$tmp"
 }
 
+rofi_keybind_rows() {
+  awk -F '\t' '
+    NR == FNR {
+      combo[$1] = $3
+      next
+    }
+    {
+      key = combo[$0]
+      key_words = key
+      key_compact = key
+      gsub(/\+/, " ", key_words)
+      gsub(/\+/, "", key_compact)
+      meta = "key=" key " key=\"" key_words "\" key=" key_words " key=" key_compact
+      printf "%s%cmeta%c%s\n", $0, 0, 31, meta
+    }
+  ' "$details_file" -
+}
+
+ordered_keybind_rows() {
+  local tmp
+  tmp="$(mktemp)"
+  ordered_keybinds > "$tmp"
+  rofi_keybind_rows < "$tmp"
+  rm -f "$tmp"
+}
+
 while true; do
   next_mode="$(next_sort_mode "$mode")"
   selection="$(
     {
       printf 'Sort: %s (next: %s)\n' "$mode" "$next_mode"
-      ordered_keybinds
+      ordered_keybind_rows
     } | "$HOME/.local/bin/rofi-menu" "${rofi_args[@]}" -dmenu -i -p "Keybinds ($mode)"
   )"
 
