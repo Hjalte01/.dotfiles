@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}/cursor-circle"
+state_dir="$runtime_dir/cursor-circle"
+armed_file="$state_dir/z-armed"
+pid_file="$state_dir/cursor-circle.pid"
+offset_file="$state_dir/offset"
+speed_file="$persist_dir/steps-per-second"
+radius_file="$persist_dir/radius"
+socket_path="/run/ydotoold/socket"
+script_path="$HOME/.local/bin/cursor-circle"
+default_speed="30"
+default_radius="18"
+
+mkdir -p "$state_dir"
+mkdir -p "$persist_dir"
+
+notify() {
+  notify-send "Cursor circle" "$1" 2>/dev/null || true
+}
+
+read_positive_int() {
+  local file="$1"
+  local fallback="$2"
+  local value="$fallback"
+
+  if [[ -f "$file" ]]; then
+    IFS= read -r value < "$file" || value="$fallback"
+  fi
+
+  if [[ ! "$value" =~ ^[0-9]+$ || "$value" -lt 1 ]]; then
+    value="$fallback"
+  fi
+
+  printf '%s\n' "$value"
+}
+
+read_speed() {
+  read_positive_int "$speed_file" "$default_speed"
+}
+
+read_radius() {
+  read_positive_int "$radius_file" "$default_radius"
+}
+
+write_speed() {
+  printf '%s\n' "$1" > "$speed_file"
+}
+
+write_radius() {
+  printf '%s\n' "$1" > "$radius_file"
+}
+
+step_delay() {
+  awk -v speed="$(read_speed)" 'BEGIN { printf "%.6f\n", 1 / speed }'
+}
+
+is_moving() {
+  [[ -f "$pid_file" ]] || return 1
+  local pid
+  IFS= read -r pid < "$pid_file" || return 1
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+stop_moving() {
+  if is_moving; then
+    local pid
+    IFS= read -r pid < "$pid_file"
+    kill "$pid" 2>/dev/null || true
+  fi
+
+  if [[ -f "$offset_file" ]]; then
+    local x y
+    read -r x y < "$offset_file" || {
+      x=0
+      y=0
+    }
+
+    if [[ "$x" =~ ^-?[0-9]+$ && "$y" =~ ^-?[0-9]+$ && ( "$x" != "0" || "$y" != "0" ) ]]; then
+      if command -v ydotool >/dev/null 2>&1 && [[ -S "$socket_path" ]]; then
+        YDOTOOL_SOCKET="$socket_path" ydotool mousemove -- "$((-x))" "$((-y))" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+
+  rm -f "$pid_file"
+  rm -f "$offset_file"
+}
+
+start_moving() {
+  if ! command -v ydotool >/dev/null 2>&1; then
+    notify "ydotool is not installed. Rebuild Home Manager first."
+    exit 1
+  fi
+
+  if [[ ! -S "$socket_path" ]]; then
+    notify "ydotoold is not running. Rebuild NixOS and restart first."
+    exit 1
+  fi
+
+  (
+    export YDOTOOL_SOCKET="$socket_path"
+    local_delay="$(step_delay)"
+    radius="$(read_radius)"
+    steps=32
+    index=1
+    current_x="$radius"
+    current_y=0
+
+    ydotool mousemove -- "$current_x" "$current_y" >/dev/null 2>&1 || exit 1
+    printf '%s %s\n' "$current_x" "$current_y" > "$offset_file"
+
+    while true; do
+      read -r next_x next_y < <(
+        awk -v r="$radius" -v steps="$steps" -v i="$index" '
+          BEGIN {
+            pi = atan2(0, -1)
+            a = 2 * pi * i / steps
+            x = r * cos(a)
+            y = r * sin(a)
+            printf "%d %d\n", int(x + (x >= 0 ? 0.5 : -0.5)), int(y + (y >= 0 ? 0.5 : -0.5))
+          }
+        '
+      )
+
+      dx=$((next_x - current_x))
+      dy=$((next_y - current_y))
+      ydotool mousemove -- "$dx" "$dy" >/dev/null 2>&1 || exit 1
+      current_x="$next_x"
+      current_y="$next_y"
+      printf '%s %s\n' "$current_x" "$current_y" > "$offset_file"
+      index=$(((index + 1) % steps))
+      sleep "$local_delay"
+    done
+  ) &
+
+  printf '%s\n' "$!" > "$pid_file"
+}
+
+restart_if_moving() {
+  if is_moving; then
+    stop_moving
+    start_moving
+  fi
+}
+
+arm_z() {
+  if [[ -x "$HOME/.local/bin/autoclicker" ]]; then
+    "$HOME/.local/bin/autoclicker" off >/dev/null 2>&1 || true
+  fi
+
+  if [[ -x "$HOME/.local/bin/autoscroll" ]]; then
+    "$HOME/.local/bin/autoscroll" off >/dev/null 2>&1 || true
+  fi
+
+  hyprctl keyword bind ", z, exec, $script_path toggle" >/dev/null
+  hyprctl keyword bind ", plus, exec, $script_path speed-up 5" >/dev/null
+  hyprctl keyword bind "CTRL, plus, exec, $script_path radius-up 4" >/dev/null
+  hyprctl keyword bind ", minus, exec, $script_path speed-down 5" >/dev/null
+  hyprctl keyword bind "CTRL, minus, exec, $script_path radius-down 4" >/dev/null
+  : > "$armed_file"
+  notify "z toggles cursor circle, +/- speed, Ctrl+/- size"
+}
+
+disarm_z() {
+  local notify_mode="${1:-always}"
+  local was_moving=0
+  if is_moving; then
+    was_moving=1
+  fi
+
+  stop_moving
+  hyprctl keyword unbind ", z" >/dev/null || true
+  hyprctl keyword unbind ", plus" >/dev/null || true
+  hyprctl keyword unbind "CTRL, plus" >/dev/null || true
+  hyprctl keyword unbind ", minus" >/dev/null || true
+  hyprctl keyword unbind "CTRL, minus" >/dev/null || true
+  rm -f "$armed_file"
+
+  if [[ "$notify_mode" == "always" || "$was_moving" == "1" ]]; then
+    notify "z is normal again"
+  fi
+}
+
+speed_up() {
+  local amount="${1:-5}"
+  [[ "$amount" =~ ^[0-9]+$ && "$amount" -ge 1 ]] || amount="5"
+
+  local speed
+  speed="$(read_speed)"
+  speed=$((speed + amount))
+  write_speed "$speed"
+  restart_if_moving
+  notify "${speed} steps/s"
+}
+
+speed_down() {
+  local amount="${1:-5}"
+  [[ "$amount" =~ ^[0-9]+$ && "$amount" -ge 1 ]] || amount="5"
+
+  local speed
+  speed="$(read_speed)"
+  speed=$((speed - amount))
+  if (( speed < 1 )); then
+    speed=1
+  fi
+  write_speed "$speed"
+  restart_if_moving
+  notify "${speed} steps/s"
+}
+
+radius_up() {
+  local amount="${1:-4}"
+  [[ "$amount" =~ ^[0-9]+$ && "$amount" -ge 1 ]] || amount="4"
+
+  local radius
+  radius="$(read_radius)"
+  radius=$((radius + amount))
+  write_radius "$radius"
+  restart_if_moving
+  notify "radius ${radius}px"
+}
+
+radius_down() {
+  local amount="${1:-4}"
+  [[ "$amount" =~ ^[0-9]+$ && "$amount" -ge 1 ]] || amount="4"
+
+  local radius
+  radius="$(read_radius)"
+  radius=$((radius - amount))
+  if (( radius < 2 )); then
+    radius=2
+  fi
+  write_radius "$radius"
+  restart_if_moving
+  notify "radius ${radius}px"
+}
+
+case "${1:-}" in
+  arm-toggle)
+    if [[ -f "$armed_file" ]]; then
+      disarm_z
+    else
+      arm_z
+    fi
+    ;;
+  toggle)
+    if is_moving; then
+      stop_moving
+      notify "stopped"
+    else
+      start_moving
+      notify "started"
+    fi
+    ;;
+  off)
+    disarm_z active
+    ;;
+  speed-up)
+    speed_up "${2:-5}"
+    ;;
+  speed-down)
+    speed_down "${2:-5}"
+    ;;
+  radius-up)
+    radius_up "${2:-4}"
+    ;;
+  radius-down)
+    radius_down "${2:-4}"
+    ;;
+  *)
+    printf 'Usage: %s {arm-toggle|toggle|off|speed-up AMOUNT|speed-down AMOUNT|radius-up AMOUNT|radius-down AMOUNT}\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac

@@ -42,4 +42,9 @@ if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
   rofi_args+=(--fullscreen)
 fi
 
-printf '%s\n' "$history" | "$HOME/.local/bin/rofi-menu" "${rofi_args[@]}" -dmenu -i -p "Notifications"
+selection="$(printf '%s\n' "$history" | "$HOME/.local/bin/rofi-menu" "${rofi_args[@]}" -dmenu -i -p "Notifications")"
+
+if [[ -n "$selection" ]]; then
+  printf '%s' "$selection" | wl-copy
+  notify-send "Notifications" "Copied selected notification"
+fi

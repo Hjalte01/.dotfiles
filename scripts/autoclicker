@@ -84,6 +84,10 @@ arm_z() {
     "$HOME/.local/bin/autoscroll" off >/dev/null 2>&1 || true
   fi
 
+  if [[ -x "$HOME/.local/bin/cursor-circle" ]]; then
+    "$HOME/.local/bin/cursor-circle" off >/dev/null 2>&1 || true
+  fi
+
   hyprctl keyword bind ", z, exec, $script_path click-toggle" >/dev/null
   hyprctl keyword bind ", plus, exec, $script_path speed-up 1" >/dev/null
   hyprctl keyword bind "CTRL, plus, exec, $script_path speed-up 10" >/dev/null

@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+notify() {
+  notify-send "$@" >/dev/null 2>&1 || true
+}
+
+selected_file="${1:-}"
+mode="choose"
+
+case "$selected_file" in
+  --choose)
+    mode="choose"
+    shift
+    selected_file="${1:-}"
+    ;;
+  --last)
+    mode="last"
+    shift
+    selected_file="${1:-}"
+    ;;
+esac
+
+if [[ -z "$selected_file" && -n "${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-}" ]]; then
+  mode="choose"
+  selected_file="$(printf '%s\n' "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | sed '/^$/d' | head -n 1)"
+fi
+
+if [[ -z "$selected_file" ]]; then
+  notify "Open with fuzzy search" "No file selected"
+  exit 1
+fi
+
+if [[ ! -e "$selected_file" ]]; then
+  notify "Open with fuzzy search" "Not found: $selected_file"
+  exit 1
+fi
+
+declare -A seen_desktop_files=()
+desktop_dirs=()
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/open-with-fuzzy"
+defaults_file="$state_dir/defaults.tsv"
+
+if [[ -n "${XDG_DATA_HOME:-}" ]]; then
+  desktop_dirs+=("$XDG_DATA_HOME/applications")
+else
+  desktop_dirs+=("$HOME/.local/share/applications")
+fi
+
+IFS=':' read -r -a data_dirs <<< "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+for data_dir in "${data_dirs[@]}"; do
+  desktop_dirs+=("$data_dir/applications")
+done
+
+desktop_rows() {
+  local desktop_dir desktop_file desktop_id name generic_name no_display hidden type
+
+  for desktop_dir in "${desktop_dirs[@]}"; do
+    [[ -d "$desktop_dir" ]] || continue
+
+    while IFS= read -r -d '' desktop_file; do
+      [[ -z "${seen_desktop_files[$desktop_file]+x}" ]] || continue
+      seen_desktop_files["$desktop_file"]=1
+
+      desktop_id="${desktop_file#"$desktop_dir/"}"
+      desktop_id="${desktop_id//\//-}"
+      name="$(awk -F= '/^Name=/{ print $2; exit }' "$desktop_file")"
+      generic_name="$(awk -F= '/^GenericName=/{ print $2; exit }' "$desktop_file")"
+      no_display="$(awk -F= '/^NoDisplay=/{ print tolower($2); exit }' "$desktop_file")"
+      hidden="$(awk -F= '/^Hidden=/{ print tolower($2); exit }' "$desktop_file")"
+      type="$(awk -F= '/^Type=/{ print $2; exit }' "$desktop_file")"
+
+      [[ "$type" == "Application" ]] || continue
+      [[ "$no_display" != "true" ]] || continue
+      [[ "$hidden" != "true" ]] || continue
+      [[ -n "$name" ]] || continue
+
+      if [[ -n "$generic_name" && "$generic_name" != "$name" ]]; then
+        printf '%s (%s)\t%s\t%s\n' "$name" "$generic_name" "$desktop_id" "$desktop_file"
+      else
+        printf '%s\t%s\t%s\n' "$name" "$desktop_id" "$desktop_file"
+      fi
+    done < <(find "$desktop_dir" \( -type f -o -type l \) -name '*.desktop' -print0 2>/dev/null)
+  done | sort -f
+}
+
+desktop_file_for_id() {
+  local wanted_id="$1"
+  local desktop_dir desktop_file desktop_id
+
+  for desktop_dir in "${desktop_dirs[@]}"; do
+    [[ -d "$desktop_dir" ]] || continue
+
+    while IFS= read -r -d '' desktop_file; do
+      desktop_id="${desktop_file#"$desktop_dir/"}"
+      desktop_id="${desktop_id//\//-}"
+
+      if [[ "$desktop_id" == "$wanted_id" ]]; then
+        printf '%s\n' "$desktop_file"
+        return 0
+      fi
+    done < <(find "$desktop_dir" \( -type f -o -type l \) -name '*.desktop' -print0 2>/dev/null)
+  done
+
+  return 1
+}
+
+save_default() {
+  local mime_type="$1"
+  local desktop_id="$2"
+  local tmp_file
+
+  [[ -n "$mime_type" && -n "$desktop_id" ]] || return 0
+
+  mkdir -p "$state_dir"
+  tmp_file="$(mktemp)"
+
+  if [[ -f "$defaults_file" ]]; then
+    awk -F '\t' -v mime_type="$mime_type" '$1 != mime_type' "$defaults_file" > "$tmp_file"
+  fi
+
+  printf '%s\t%s\n' "$mime_type" "$desktop_id" >> "$tmp_file"
+  mv "$tmp_file" "$defaults_file"
+}
+
+saved_default_for_mime() {
+  local mime_type="$1"
+
+  [[ -f "$defaults_file" ]] || return 1
+  awk -F '\t' -v mime_type="$mime_type" '$1 == mime_type { print $2; exit }' "$defaults_file"
+}
+
+mime_type="$(xdg-mime query filetype "$selected_file" || true)"
+
+if [[ "$mode" == "last" && -n "$mime_type" ]]; then
+  saved_desktop_id="$(saved_default_for_mime "$mime_type" || true)"
+
+  if [[ -n "$saved_desktop_id" ]]; then
+    saved_desktop_file="$(desktop_file_for_id "$saved_desktop_id" || true)"
+
+    if [[ -n "$saved_desktop_file" ]]; then
+      exec gio launch "$saved_desktop_file" "$selected_file"
+    fi
+  fi
+fi
+
+selection="$(
+  desktop_rows \
+    | "$HOME/.local/bin/rofi-menu" -dmenu -i -matching fuzzy -display-column 1 -p "Open with"
+)"
+
+[[ -n "$selection" ]] || exit 0
+
+desktop_file="${selection##*$'\t'}"
+selection_without_file="${selection%$'\t'*}"
+desktop_id="${selection_without_file##*$'\t'}"
+file_name="$(basename -- "$selected_file")"
+app_name="${selection_without_file%$'\t'*}"
+
+save_default "$mime_type" "$desktop_id"
+
+if gio launch "$desktop_file" "$selected_file"; then
+  if [[ -n "$mime_type" ]]; then
+    notify "Opening file" "$file_name with $app_name, remembered for $mime_type"
+  else
+    notify "Opening file" "$file_name with $app_name"
+  fi
+else
+  notify "Open with failed" "$file_name with $app_name"
+  exit 1
+fi
