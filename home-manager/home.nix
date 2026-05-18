@@ -343,7 +343,7 @@ in
     name = "Steam Run";
     genericName = "Compatibility Runtime";
     comment = "Run executable files through the Steam runtime";
-    exec = "${pkgs.steam-run}/bin/steam-run %f";
+    exec = "${pkgs.coreutils}/bin/env LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath [ pkgs.libxmu pkgs.libGLU ]} ${pkgs.steam-run}/bin/steam-run %f";
     icon = "steam";
     terminal = false;
     noDisplay = true;
