@@ -286,6 +286,12 @@ in
 
   xdg.mimeApps = {
     enable = true;
+    associations.added = {
+      "application/x-executable" = [ "steam-run.desktop" ];
+      "application/x-sharedlib" = [ "steam-run.desktop" ];
+      "application/x-shellscript" = [ "steam-run.desktop" ];
+      "text/x-shellscript" = [ "steam-run.desktop" ];
+    };
     defaultApplications = {
       "image/png" = [ "imv.desktop" ];
       "image/jpeg" = [ "imv.desktop" ];
@@ -301,6 +307,23 @@ in
       "x-scheme-handler/unknown" = [ "firefox.desktop" ];
       "application/pdf" = [ "firefox.desktop" ]; # Eksempel: Åbn PDF i Firefox
     };
+  };
+
+  xdg.desktopEntries."steam-run" = {
+    name = "Steam Run";
+    genericName = "Compatibility Runtime";
+    comment = "Run executable files through the Steam runtime";
+    exec = "${pkgs.steam-run}/bin/steam-run %f";
+    icon = "steam";
+    terminal = false;
+    noDisplay = true;
+    mimeType = [
+      "application/x-executable"
+      "application/x-sharedlib"
+      "application/x-shellscript"
+      "text/x-shellscript"
+    ];
+    categories = [ "Utility" ];
   };
 
   # ==========================================
