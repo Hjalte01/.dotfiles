@@ -62,6 +62,11 @@
   # Enable the X11 windowing system.
   services.xserver.enable = true;
 
+  # Enable GPU acceleration, including 32-bit graphics drivers for games.
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+  };
 
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
