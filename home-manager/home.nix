@@ -35,6 +35,7 @@ in
     ffmpeg       # Handle the downloade video
 
     steam-run    # Run games in Nix
+    ouch         # Extract archives from Nautilus
     unrar        # unzip rar files
     
     wineWow64Packages.stable
@@ -199,6 +200,11 @@ in
       executable = true;
     };
 
+    ".local/bin/extract-archive" = {
+      source = makeLink "scripts/extract-archive" ../scripts/extract-archive;
+      executable = true;
+    };
+
     # 6. Tmux (Single File)
     ".tmux.conf".source = makeLink "tmux/.tmux.conf" ../tmux/.tmux.conf;
 
@@ -291,6 +297,18 @@ in
       "application/x-sharedlib" = [ "steam-run.desktop" ];
       "application/x-shellscript" = [ "steam-run.desktop" ];
       "text/x-shellscript" = [ "steam-run.desktop" ];
+      "application/gzip" = [ "extract-archive.desktop" ];
+      "application/vnd.rar" = [ "extract-archive.desktop" ];
+      "application/x-7z-compressed" = [ "extract-archive.desktop" ];
+      "application/x-bzip" = [ "extract-archive.desktop" ];
+      "application/x-bzip-compressed-tar" = [ "extract-archive.desktop" ];
+      "application/x-compressed-tar" = [ "extract-archive.desktop" ];
+      "application/x-gtar" = [ "extract-archive.desktop" ];
+      "application/x-rar" = [ "extract-archive.desktop" ];
+      "application/x-tar" = [ "extract-archive.desktop" ];
+      "application/x-xz" = [ "extract-archive.desktop" ];
+      "application/x-xz-compressed-tar" = [ "extract-archive.desktop" ];
+      "application/zip" = [ "extract-archive.desktop" ];
     };
     defaultApplications = {
       "image/png" = [ "imv.desktop" ];
@@ -306,6 +324,18 @@ in
       "x-scheme-handler/https" = [ "firefox.desktop" ];
       "x-scheme-handler/unknown" = [ "firefox.desktop" ];
       "application/pdf" = [ "firefox.desktop" ]; # Eksempel: Åbn PDF i Firefox
+      "application/gzip" = [ "extract-archive.desktop" ];
+      "application/vnd.rar" = [ "extract-archive.desktop" ];
+      "application/x-7z-compressed" = [ "extract-archive.desktop" ];
+      "application/x-bzip" = [ "extract-archive.desktop" ];
+      "application/x-bzip-compressed-tar" = [ "extract-archive.desktop" ];
+      "application/x-compressed-tar" = [ "extract-archive.desktop" ];
+      "application/x-gtar" = [ "extract-archive.desktop" ];
+      "application/x-rar" = [ "extract-archive.desktop" ];
+      "application/x-tar" = [ "extract-archive.desktop" ];
+      "application/x-xz" = [ "extract-archive.desktop" ];
+      "application/x-xz-compressed-tar" = [ "extract-archive.desktop" ];
+      "application/zip" = [ "extract-archive.desktop" ];
     };
   };
 
@@ -322,6 +352,31 @@ in
       "application/x-sharedlib"
       "application/x-shellscript"
       "text/x-shellscript"
+    ];
+    categories = [ "Utility" ];
+  };
+
+  xdg.desktopEntries."extract-archive" = {
+    name = "Extract Archive";
+    genericName = "Archive Extractor";
+    comment = "Extract archives next to the selected file";
+    exec = "${config.home.homeDirectory}/.local/bin/extract-archive %f";
+    icon = "package-x-generic";
+    terminal = false;
+    noDisplay = true;
+    mimeType = [
+      "application/gzip"
+      "application/vnd.rar"
+      "application/x-7z-compressed"
+      "application/x-bzip"
+      "application/x-bzip-compressed-tar"
+      "application/x-compressed-tar"
+      "application/x-gtar"
+      "application/x-rar"
+      "application/x-tar"
+      "application/x-xz"
+      "application/x-xz-compressed-tar"
+      "application/zip"
     ];
     categories = [ "Utility" ];
   };

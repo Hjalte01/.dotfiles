@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+notify() {
+  notify-send "$@" >/dev/null 2>&1 || true
+}
+
+if [ "$#" -eq 0 ]; then
+  notify "Archive extractor" "No archive selected"
+  exit 1
+fi
+
+archive=$1
+if [ ! -f "$archive" ]; then
+  notify "Archive extractor" "Not a file: $archive"
+  exit 1
+fi
+
+output_dir=$(dirname -- "$archive")
+archive_name=$(basename -- "$archive")
+
+if ouch decompress --yes --dir "$output_dir" "$archive"; then
+  notify "Archive extracted" "$archive_name"
+else
+  notify "Archive extraction failed" "$archive_name"
+  exit 1
+fi
