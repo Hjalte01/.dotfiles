@@ -1,116 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-venv_path="$HOME/.local/share/pix2tex-venv"
 tmp_img="$(mktemp --suffix=.png)"
-install_log="$HOME/.cache/pix2tex-install.log"
-notify_id=""
-python_bin="python3.11"
-runtime_env="$HOME/.local/share/math-ocr/env"
-
-if [[ -f "$runtime_env" ]]; then
-  # shellcheck source=/dev/null
-  source "$runtime_env"
-fi
+pix2tex_bin="${PIX2TEX_BIN:-pix2tex}"
+log_file="${XDG_CACHE_HOME:-$HOME/.cache}/math-ocr.log"
 
 cleanup() {
   rm -f "$tmp_img"
 }
 trap cleanup EXIT
 
-notify_progress() {
-  local body="$1"
-
-  if [[ -n "$notify_id" ]]; then
-    notify_id="$(notify-send -p -r "$notify_id" -u critical -t 0 "Math OCR" "$body" 2>/dev/null || true)"
-  else
-    notify_id="$(notify-send -p -u critical -t 0 "Math OCR" "$body" 2>/dev/null || true)"
-  fi
-}
-
-last_log_line() {
-  grep -v '^[[:space:]]*$' "$install_log" 2>/dev/null | tail -n 1 | cut -c 1-180 || true
-}
-
-run_install_step() {
-  local label="$1"
-  shift
-
-  notify_progress "$label
-Starting...
-Log: $install_log"
-
-  "$@" >>"$install_log" 2>&1 &
-  local pid=$!
-
-  while kill -0 "$pid" 2>/dev/null; do
-    local line
-    line="$(last_log_line)"
-    notify_progress "$label
-${line:-Working...}
-Log: $install_log"
-    sleep 5
-  done
-
-  if ! wait "$pid"; then
-    local line
-    line="$(last_log_line)"
-    notify_progress "$label failed
-${line:-Check the install log.}
-Log: $install_log"
-    exit 1
-  fi
-}
-
 debug_pix2tex() {
   printf 'Math OCR debug\n'
   printf '==============\n'
-  printf 'venv: %s\n' "$venv_path"
-  printf 'install log: %s\n' "$install_log"
-  printf 'python3.11: %s\n' "$(command -v "$python_bin" || printf 'not found')"
+  printf 'pix2tex: %s\n' "$(command -v "$pix2tex_bin" || printf 'not found')"
 
-  if [[ -x "$venv_path/bin/python" ]]; then
-    printf '\nVenv Python:\n'
-    "$venv_path/bin/python" -V
+  if command -v "$pix2tex_bin" >/dev/null 2>&1; then
+    "$pix2tex_bin" --help | sed -n '1,30p'
   else
-    printf '\nVenv Python: missing\n'
-  fi
-
-  if [[ -x "$venv_path/bin/pix2tex" ]]; then
-    printf '\npix2tex executable:\n'
-    printf '%s\n' "$venv_path/bin/pix2tex"
-    "$venv_path/bin/pix2tex" --help | sed -n '1,30p'
-  else
-    printf '\npix2tex executable: missing\n'
-  fi
-
-  if [[ -x "$venv_path/bin/python" ]]; then
-    printf '\nInstalled packages:\n'
-    "$venv_path/bin/python" -m pip show pix2tex torch torchvision transformers 2>/dev/null | sed -n '1,180p' || true
-
-    printf '\nImport checks:\n'
-    "$venv_path/bin/python" - <<'PY'
-import importlib
-
-for name in ["torch", "torchvision", "transformers", "pix2tex", "PIL", "cv2"]:
-    try:
-        module = importlib.import_module(name)
-        version = getattr(module, "__version__", "unknown")
-        print(f"OK {name}: {version}")
-    except Exception as exc:
-        print(f"FAIL {name}: {type(exc).__name__}: {exc}")
-
-try:
-    import torch
-    print(f"torch.cuda.is_available: {torch.cuda.is_available()}")
-except Exception as exc:
-    print(f"FAIL torch cuda check: {type(exc).__name__}: {exc}")
-PY
-  fi
-
-  if [[ -f "$install_log" ]]; then
-    printf '\nLast install log lines:\n'
-    tail -n 80 "$install_log"
+    printf 'Run your Home Manager switch so the Nix-managed pix2tex package is installed.\n'
   fi
 }
 
@@ -119,33 +27,17 @@ case "${1:-run}" in
     debug_pix2tex
     exit 0
     ;;
-  reinstall)
-    rm -rf "$venv_path"
-    ;;
   run)
     ;;
   *)
-    printf 'Usage: %s [run|debug|reinstall]\n' "${0##*/}" >&2
+    printf 'Usage: %s [run|debug]\n' "${0##*/}" >&2
     exit 2
     ;;
 esac
 
-if [[ -x "$venv_path/bin/python" ]]; then
-  venv_python_version="$("$venv_path/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)"
-  if [[ "$venv_python_version" != "3.11" ]]; then
-    rm -rf "$venv_path"
-  fi
-fi
-
-if [[ ! -x "$venv_path/bin/pix2tex" ]]; then
-  mkdir -p "$(dirname "$install_log")"
-  : >"$install_log"
-
-  run_install_step "Creating pix2tex Python environment" "$python_bin" -m venv "$venv_path"
-  run_install_step "Updating pip for pix2tex" "$venv_path/bin/python" -m pip install --upgrade pip
-  run_install_step "Downloading pix2tex and PyTorch" "$venv_path/bin/python" -m pip install "pix2tex"
-
-  notify_progress "pix2tex installed. Select an equation area."
+if ! command -v "$pix2tex_bin" >/dev/null 2>&1; then
+  notify-send -u critical "Math OCR" "pix2tex is not installed. Run your Home Manager switch." 2>/dev/null || true
+  exit 1
 fi
 
 geometry="$(slurp)" || exit 1
@@ -153,7 +45,14 @@ grim -g "$geometry" "$tmp_img"
 
 notify-send "Math OCR" "Processing equation..." -t 2000
 
-latex="$("$venv_path/bin/pix2tex" "$tmp_img" | sed -E "s#^$tmp_img:[[:space:]]*##" | sed '/^[[:space:]]*$/d' | tail -n 1)"
+mkdir -p "$(dirname "$log_file")"
+if ! output="$("$pix2tex_bin" "$tmp_img" 2>"$log_file")"; then
+  last_error="$(tail -n 3 "$log_file" | tr '\n' ' ' | cut -c 1-180)"
+  notify-send -u critical "Math OCR failed" "${last_error:-See $log_file}"
+  exit 1
+fi
+
+latex="$(printf '%s\n' "$output" | sed -E "s#^$tmp_img:[[:space:]]*##" | sed '/^[[:space:]]*$/d' | tail -n 1)"
 
 if [[ -z "$latex" ]]; then
   notify-send -u critical "Math OCR" "No LaTeX output detected"

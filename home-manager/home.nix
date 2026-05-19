@@ -17,6 +17,191 @@
     pkgs.libGLU
     pkgs.libGL
   ];
+
+  entmax = pkgs.python313Packages.buildPythonPackage rec {
+    pname = "entmax";
+    version = "1.3";
+    format = "wheel";
+
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/06/a0/71747f0d98e441d0670b06205afd24d832e88c0ee62129ca47ce88505304/${pname}-${version}-py3-none-any.whl";
+      hash = "sha256-Qbse29SXobU7Hw/IC+/VQ0mdxwS05UNt32xXKKLQBUY=";
+    };
+
+    propagatedBuildInputs = with pkgs.python313Packages; [
+      torch
+    ];
+
+    buildPhase = ''
+      runHook preBuild
+      runHook postBuild
+    '';
+    doCheck = false;
+  };
+
+  xTransformers = pkgs.python313Packages.buildPythonPackage rec {
+    pname = "x-transformers";
+    version = "0.15.0";
+    format = "wheel";
+
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/be/52/62fd9d73f4c3f56442c590bc020f25597df5ba37db789f7861922b991e5c/x_transformers-${version}-py3-none-any.whl";
+      hash = "sha256-f+788y9GAFwrkUHX3AsIoKRy5Kf06h+V6ejdTnkicwk=";
+    };
+
+    propagatedBuildInputs = with pkgs.python313Packages; [
+      einops
+      torch
+      entmax
+    ];
+
+    buildPhase = ''
+      runHook preBuild
+      runHook postBuild
+    '';
+    doCheck = false;
+  };
+
+  timm = pkgs.python313Packages.buildPythonPackage rec {
+    pname = "timm";
+    version = "0.5.4";
+    format = "wheel";
+
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/49/65/a83208746dc9c0d70feff7874b49780ff110810feb528df4b0ecadcbee60/${pname}-${version}-py3-none-any.whl";
+      hash = "sha256-BZLI/S1G0HacC36VSz2s6pN2nu5A2rtL1/KsuFJDtYg=";
+    };
+
+    propagatedBuildInputs = with pkgs.python313Packages; [
+      torch
+      torchvision
+    ];
+
+    buildPhase = ''
+      runHook preBuild
+      runHook postBuild
+    '';
+    doCheck = false;
+  };
+
+  pix2tex = pkgs.python313Packages.buildPythonApplication rec {
+    pname = "pix2tex";
+    version = "0.1.4";
+    format = "wheel";
+
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/12/b8/673667ace0a131169502420810aa9dfca69aad960d5af88da68ddd46c7f0/${pname}-${version}-py3-none-any.whl";
+      hash = "sha256-oCQwlQj8PopM5SQeCVJ2Ym0JjfU+YJQQAT8uw1pLdhI=";
+    };
+
+    weights = pkgs.fetchurl {
+      url = "https://github.com/lukas-blecher/LaTeX-OCR/releases/download/v0.0.1/weights.pth";
+      sha256 = "1anzl6am328gvkmph3jy2j1y5jym7gc8nnpvhav6q9ixqm0r2gd6";
+    };
+
+    imageResizer = pkgs.fetchurl {
+      url = "https://github.com/lukas-blecher/LaTeX-OCR/releases/download/v0.0.1/image_resizer.pth";
+      sha256 = "0n44f69adbfx7cdmjwr0miv735rxq8jvp434a8mi9bc5k5jj0f0w";
+    };
+
+    nativeBuildInputs = [
+      pkgs.ninja
+      pkgs.python313Packages.pythonRelaxDepsHook
+    ];
+
+    pythonRelaxDeps = [
+      "albumentations"
+    ];
+    pythonRemoveDeps = [
+      "opencv-python-headless"
+    ];
+
+    propagatedBuildInputs = with pkgs.python313Packages; [
+      albumentations
+      einops
+      munch
+      numpy
+      opencv4
+      pandas
+      pillow
+      pyyaml
+      requests
+      timm
+      tokenizers
+      torch
+      tqdm
+      transformers
+      xTransformers
+    ];
+
+    buildPhase = ''
+      runHook preBuild
+      runHook postBuild
+    '';
+    postInstall = ''
+      transforms_file="$out/${pkgs.python313.sitePackages}/pix2tex/dataset/transforms.py"
+      substituteInPlace "$transforms_file" \
+        --replace-fail "value=[255, 255, 255]" "fill=[255, 255, 255]" \
+        --replace-fail "alb.GaussNoise(10, p=.2)" "alb.GaussNoise(std_range=(0.0, 10.0 / 255.0), p=.2)" \
+        --replace-fail "alb.ImageCompression(95, p=.3)" "alb.ImageCompression(quality_range=(95, 100), p=.3)" \
+        --replace-fail "alb.ToGray(always_apply=True)" "alb.ToGray(p=1.0)"
+
+      checkpoint_dir="$out/${pkgs.python313.sitePackages}/pix2tex/model/checkpoints"
+      install -Dm644 "$weights" "$checkpoint_dir/weights.pth"
+      install -Dm644 "$imageResizer" "$checkpoint_dir/image_resizer.pth"
+    '';
+
+    doCheck = false;
+  };
+
+  codex = pkgs.stdenvNoCC.mkDerivation rec {
+    pname = "codex-cli";
+    version = "0.131.0";
+
+    src = pkgs.fetchurl {
+      url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}.tgz";
+      hash = "sha512-5/fNFAotnPaNSX1jGAAGgWk65HGZupWPnka+DzXdoNzl78RGw0eGpOjpowF+dtPRTEvdwt0U8qoptUjtefitBQ==";
+    };
+
+    codexLinuxX64 = pkgs.fetchurl {
+      url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}-linux-x64.tgz";
+      hash = "sha512-Fj9P7h3iBgjAQKzoEyUkb1Q8QMVLqaf62UzlL1jYeDhIzbDMI/gaV0tOackIGXPcfguzzORJC1g5pD9SMWqU5g==";
+    };
+
+    nativeBuildInputs = [
+      pkgs.makeWrapper
+    ];
+
+    unpackPhase = ''
+      runHook preUnpack
+
+      mkdir -p source native
+      tar -xzf "$src" --strip-components=1 -C source
+      tar -xzf "$codexLinuxX64" --strip-components=1 -C native
+
+      runHook postUnpack
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      package_root="$out/lib/node_modules/@openai/codex"
+      native_root="$package_root/node_modules/@openai/codex-linux-x64"
+
+      mkdir -p "$package_root" "$native_root" "$out/bin"
+      cp -R source/. "$package_root/"
+      cp -R native/. "$native_root/"
+
+      chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/codex/codex"
+      chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/path/rg"
+      chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap"
+
+      makeWrapper ${pkgs.nodejs_22}/bin/node "$out/bin/codex" \
+        --add-flags "$package_root/bin/codex.js"
+
+      runHook postInstall
+    '';
+  };
 in {
   home.username = "hjalte";
   home.homeDirectory = "/home/hjalte";
@@ -57,7 +242,8 @@ in {
 
     ghostty # Terminal
     tree-sitter # Nvim needs it
-    python311 # Runtime for pix2tex venv used by math-ocr
+    python311
+    pix2tex # Math OCR without runtime pip installs
     nodejs_22 # required by mason
     unzip # required by mason
     curl
@@ -74,6 +260,7 @@ in {
 
     glow
     tree
+    codex
     bubblewrap # required by codex AI for secure code sandboxing
     man-pages # C library/API man pages, e.g. man 3 printf
     man-pages-posix
@@ -197,6 +384,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/codex" = {
+      source = "${codex}/bin/codex";
+      executable = true;
+    };
+
     ".local/bin/open-with-fuzzy" = {
       source = makeLink "scripts/open-with-fuzzy" ../scripts/open-with-fuzzy;
       executable = true;
@@ -206,10 +398,6 @@ in {
       source = makeLink "scripts/open-with-fuzzy" ../scripts/open-with-fuzzy;
       executable = true;
     };
-
-    ".local/share/math-ocr/env".text = ''
-      export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib:''${LD_LIBRARY_PATH:-}"
-    '';
 
     ".local/bin/notification-popups" = {
       source = makeLink "scripts/notification-popups" ../scripts/notification-popups;
