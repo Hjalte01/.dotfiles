@@ -20,6 +20,12 @@
 in {
   home.username = "hjalte";
   home.homeDirectory = "/home/hjalte";
+  home.sessionPath = [
+    "$HOME/.local/bin"
+  ];
+  home.sessionVariables = {
+    NPM_CONFIG_PREFIX = "${config.home.homeDirectory}/.local";
+  };
 
   # Packages you want installed just for your user
   home.packages = with pkgs; [
@@ -239,6 +245,11 @@ in {
 
     # 7. Bash (Single File)
     ".mybashrc.sh".source = makeLink "bash/.mybashrc.sh" ../bash/.mybashrc.sh;
+
+    # Keep npm global installs out of the immutable Nix store.
+    ".npmrc".text = ''
+      prefix=${config.home.homeDirectory}/.local
+    '';
 
     # 8. Hyprland (Single File)
     ".config/hypr/hyprland.conf".source = makeLink "hypr/hyprland.conf" ../hypr/hyprland.conf;

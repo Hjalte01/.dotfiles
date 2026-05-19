@@ -223,6 +223,8 @@ git_added_keybinds() {
 }
 
 ordered_keybinds() {
+  local tmp
+
   format_keybinds > "$details_file"
 
   if [[ "$mode" == "added" ]]; then
