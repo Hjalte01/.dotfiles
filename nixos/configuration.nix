@@ -1,16 +1,17 @@
 # Edit this configuration file to define what should be installed on
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
-
-{ config, pkgs, ... }:
-
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-    ];
+  config,
+  pkgs,
+  ...
+}: {
+  imports = [
+    # Include the results of the hardware scan.
+    ./hardware-configuration.nix
+  ];
   # Add nixos flakes for reproducibility
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = ["nix-command" "flakes"];
 
   # No SUDO password
   security.sudo.wheelNeedsPassword = false;
@@ -30,6 +31,8 @@
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  # Work around a MediaTek MT7921 Bluetooth regression in current stable kernels.
+  boot.kernelPackages = pkgs.linuxPackages_6_6;
 
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
@@ -74,7 +77,7 @@
 
   systemd.services.ydotoold = {
     description = "ydotool input daemon";
-    wantedBy = [ "multi-user.target" ];
+    wantedBy = ["multi-user.target"];
     serviceConfig = {
       ExecStart = "${pkgs.bash}/bin/bash -lc 'exec ${pkgs.ydotool}/bin/ydotoold --socket-path=/run/ydotoold/socket --socket-perm=0660 --socket-own=$(${pkgs.coreutils}/bin/id -u hjalte):$(${pkgs.coreutils}/bin/id -g hjalte)'";
       Restart = "always";
@@ -147,7 +150,7 @@
       '';
     };
   };
-  
+
   # Enable the GNOME Desktop Environment.
   services.displayManager.gdm.enable = true;
   services.desktopManager.gnome.enable = true;
@@ -165,6 +168,12 @@
 
   # Enable CUPS to print documents.
   services.printing.enable = true;
+
+  # Enable Bluetooth support. The Blueman manager GUI is installed via Home Manager.
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+  };
 
   # Enable sound with pipewire.
   services.pulseaudio.enable = false;
@@ -190,9 +199,9 @@
   users.users.hjalte = {
     isNormalUser = true;
     description = "Hjalte";
-    extraGroups = [ "networkmanager" "wheel" "vboxusers" ];
+    extraGroups = ["networkmanager" "wheel" "vboxusers"];
     packages = with pkgs; [
-    #  thunderbird
+      #  thunderbird
     ];
   };
 
@@ -228,12 +237,11 @@
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-  #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
-  #  wget
+    #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
+    #  wget
     git
     vagrant
   ];
-
 
   # ==========================================
   # KEYBOARD REMAPPING (keyd)
@@ -242,7 +250,7 @@
     enable = true;
     keyboards = {
       default = {
-        ids = [ "05ac:024f" "*HAILUCK*" ];
+        ids = ["05ac:024f" "*HAILUCK*"];
         settings = {
           # Default state (Windows Mode)
           main = {
@@ -255,13 +263,13 @@
             kbdillumup = "brightnessup";
             previoussong = "playpause";
           };
-          
+
           # This layer activates automatically when Ctrl + Shift are held
           "control+shift" = {
             # Pressing backspace while in this layer toggles the mac mode!
             backspace = "toggle(mac_mode)";
           };
-          
+
           # Hidden state (Mac Mode - activates when toggled)
           mac_mode = {
             leftalt = "leftmeta";
@@ -275,7 +283,7 @@
       };
     };
   };
-  
+
   # Inside your configuration.nix
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
@@ -287,9 +295,6 @@
     nss
     expat
   ];
-
-
-
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -305,7 +310,7 @@
   # services.openssh.enable = true;
 
   # Open ports in the firewall.
-  networking.firewall.allowedTCPPorts = [ 5900 ];
+  networking.firewall.allowedTCPPorts = [5900];
   # networking.firewall.allowedUDPPorts = [ ... ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
@@ -317,5 +322,4 @@
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "25.11"; # Did you read the comment?
-
 }
