@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+inbox="${CODEX_CAPTURE_DIR:-$HOME/Documents/Codex-Inbox}"
+timestamp="$(date +'%Y-%m-%d_%H-%M-%S')"
+
+notify() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "$@"
+  fi
+}
+
+mark_old() {
+  local path base target
+
+  shopt -s nullglob
+  for path in "$inbox"/ACTIVE_*; do
+    base="$(basename "$path")"
+    target="$inbox/OLD_${base#ACTIVE_}"
+    if [[ -e "$target" ]]; then
+      target="$inbox/OLD_${timestamp}_${base#ACTIVE_}"
+    fi
+    mv "$path" "$target"
+  done
+  shopt -u nullglob
+}
+
+write_marker() {
+  local saved="$1"
+
+  {
+    printf 'active=%s\n' "$saved"
+    printf 'saved_at=%s\n' "$timestamp"
+    printf 'note=%s\n' "Read ACTIVE_* files only unless I ask for older context."
+  } > "$inbox/ACTIVE_CONTEXT.txt"
+}
+
+save_text() {
+  local output="$inbox/ACTIVE_${timestamp}.txt"
+  local tmp
+
+  tmp="$(mktemp "$inbox/.codex-capture.XXXXXX")"
+  wl-paste --type text > "$tmp"
+
+  if [[ ! -s "$tmp" ]]; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  mark_old
+  mv "$tmp" "$output"
+  write_marker "$output"
+  printf '%s\n' "$output"
+  notify "Codex context saved" "$output"
+}
+
+save_image() {
+  local mime="$1"
+  local ext="bin"
+  local output tmp
+
+  case "$mime" in
+    image/png) ext="png" ;;
+    image/jpeg) ext="jpg" ;;
+    image/webp) ext="webp" ;;
+    image/gif) ext="gif" ;;
+    image/bmp) ext="bmp" ;;
+    image/tiff) ext="tiff" ;;
+  esac
+
+  output="$inbox/ACTIVE_${timestamp}.${ext}"
+  tmp="$(mktemp "$inbox/.codex-capture.XXXXXX")"
+  wl-paste --type "$mime" > "$tmp"
+
+  if [[ ! -s "$tmp" ]]; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  mark_old
+  mv "$tmp" "$output"
+  write_marker "$output"
+  printf '%s\n' "$output"
+  notify "Codex image saved" "$output"
+}
+
+main() {
+  local types mime
+
+  mkdir -p "$inbox"
+
+  if ! types="$(wl-paste --list-types 2>/dev/null)"; then
+    notify "Codex capture failed" "Could not read clipboard"
+    exit 1
+  fi
+
+  if printf '%s\n' "$types" | rg -q '^(text/plain|text/plain;charset=utf-8|UTF8_STRING)$'; then
+    save_text
+    exit 0
+  fi
+
+  mime="$(printf '%s\n' "$types" | rg '^image/(png|jpeg|webp|gif|bmp|tiff)$' | head -n 1 || true)"
+  if [[ -n "$mime" ]]; then
+    save_image "$mime"
+    exit 0
+  fi
+
+  notify "Codex capture skipped" "Clipboard is not text or a supported image"
+  printf 'Clipboard is not text or a supported image.\n' >&2
+  exit 1
+}
+
+main "$@"
