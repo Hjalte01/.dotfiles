@@ -409,6 +409,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/codex-capture" = {
+      source = makeLink "scripts/codex-capture" ../scripts/codex-capture;
+      executable = true;
+    };
+
     ".local/bin/notification-history" = {
       source = makeLink "scripts/notification-history" ../scripts/notification-history;
       executable = true;

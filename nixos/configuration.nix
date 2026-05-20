@@ -70,6 +70,7 @@
 
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
+  programs.wayvnc.enable = true;
 
   systemd.services.ydotoold = {
     description = "ydotool input daemon";
@@ -304,7 +305,7 @@
   # services.openssh.enable = true;
 
   # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
+  networking.firewall.allowedTCPPorts = [ 5900 ];
   # networking.firewall.allowedUDPPorts = [ ... ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
