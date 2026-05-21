@@ -75,6 +75,7 @@ in {
       alias l='ls -CF'
       alias cl='clear'
       alias dots='cd ~/.dotfiles'
+      alias cd.='cd ~/.dotfiles'
       alias cx='codex'
       alias ta='tmux new-session -A -s main'
 
