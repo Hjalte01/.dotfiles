@@ -44,6 +44,16 @@ Install NixOS from this flake:
 nix run github:nix-community/nixos-anywhere -- --flake ~/.dotfiles#mobile-dev root@SERVER_IP
 ```
 
+If Hetzner's default image fails during the kexec step, enable the Hetzner Rescue System, power cycle the server, then run the install from rescue:
+
+```sh
+ssh-keygen -R SERVER_IP
+ssh root@SERVER_IP lsblk
+ssh root@SERVER_IP 'curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes'
+ssh root@SERVER_IP 'ln -sf /nix/var/nix/profiles/default/bin/* /usr/local/bin/ && nix --version'
+nix run github:nix-community/nixos-anywhere -- --phases disko,install,reboot --flake ~/.dotfiles#mobile-dev root@SERVER_IP
+```
+
 After reboot:
 
 ```sh
