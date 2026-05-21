@@ -153,72 +153,13 @@
 
     doCheck = false;
   };
-
-  codex = pkgs.stdenvNoCC.mkDerivation rec {
-    pname = "codex-cli";
-    version = "0.132.0";
-
-    src = pkgs.fetchurl {
-      url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}.tgz";
-      hash = "sha512-OaTUz3oTbUP23I1yprQyaqO5LvlfWbTFIAI/JT2Hm0kgIsD+nKK14vauTzAt3zaeik6D7+meekCTuNdpU1dU2Q==";
-    };
-
-    codexLinuxX64 = pkgs.fetchurl {
-      url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}-linux-x64.tgz";
-      hash = "sha512-aGJPB+QkgtYQNQMlRGmE7oZstULu7k4trpux5r3CCZGPun4Xtwx3swtZXm7cWOVeTUkNfGCqdtCQ0bv6SKRiLA==";
-    };
-
-    nativeBuildInputs = [
-      pkgs.makeWrapper
-    ];
-
-    unpackPhase = ''
-      runHook preUnpack
-
-      mkdir -p source native
-      tar -xzf "$src" --strip-components=1 -C source
-      tar -xzf "$codexLinuxX64" --strip-components=1 -C native
-
-      runHook postUnpack
-    '';
-
-    installPhase = ''
-      runHook preInstall
-
-      package_root="$out/lib/node_modules/@openai/codex"
-      native_root="$package_root/node_modules/@openai/codex-linux-x64"
-
-      mkdir -p "$package_root" "$native_root" "$out/bin"
-      cp -R source/. "$package_root/"
-      cp -R native/. "$native_root/"
-
-      chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/codex/codex"
-      chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/path/rg"
-      chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap"
-
-      makeWrapper ${pkgs.nodejs_22}/bin/node "$out/bin/codex" \
-        --add-flags "$package_root/bin/codex.js"
-
-      runHook postInstall
-    '';
-  };
 in {
-  home.username = "hjalte";
-  home.homeDirectory = "/home/hjalte";
-  home.sessionPath = [
-    "$HOME/.local/bin"
+  imports = [
+    ./common.nix
   ];
-  home.sessionVariables = {
-    NPM_CONFIG_PREFIX = "${config.home.homeDirectory}/.local";
-  };
 
   # Packages you want installed just for your user
   home.packages = with pkgs; [
-    neovim
-    git
-    ripgrep # LazyVim needs this
-    fd # LazyVim needs this
-    gcc # Needed for Treesitter
     stdenv.cc.cc.lib # Runtime libstdc++ for Python ML wheels
     zlib # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
@@ -244,24 +185,8 @@ in {
     tree-sitter # Nvim needs it
     python311
     pix2tex # Math OCR without runtime pip installs
-    nodejs_22 # required by mason
-    unzip # required by mason
-    curl
-    wget
-    unzip
-    fzf
-    zoxide # Smart/frecency directory jumping
     xdg-utils # Provides xdg-open for the open alias
     glib # Provides gio for the fuzzy "Open with" launcher
-    nh # Friendly NixOS/Home Manager rebuild wrapper
-    nix-output-monitor # Readable Nix build output
-    alejandra # Nix formatter
-    nixd # Nix language server
-
-    glow
-    tree
-    codex
-    bubblewrap # required by codex AI for secure code sandboxing
     man-pages # C library/API man pages, e.g. man 3 printf
     man-pages-posix
 
@@ -270,14 +195,11 @@ in {
     rofi
 
     # For your custom scripts
-    jq # Required by window_opacity.sh to parse JSON
     ydotool # Wayland input helper for the autoclicker
 
     # For your app keybinds
     nautilus # Your preferred file manager
     spotify # Your music player
-    btop # Your system monitor
-    lazygit # Your git manager
     lazydocker # Your docker manager
     wlr-randr # Useful for manual display checks
     blueman # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
@@ -297,8 +219,6 @@ in {
     vtsls
     pyright
     stylua
-    shfmt
-    shellcheck
     lua-language-server
     jdt-language-server
     glibc.dev # The core C standard library headers (<stdio.h>, <stdlib.h>)
@@ -310,12 +230,6 @@ in {
   # SYMLINKING DOTFILES
   # ==========================================
   home.file = {
-    # 1. Neovim (Directory - needs recursive)
-    ".config/nvim" = {
-      source = makeLink "nvim/.config/nvim" ../nvim/.config/nvim;
-      recursive = true;
-    };
-
     # 2. Waybar (Directory - needs recursive)
     ".config/waybar" = {
       source = makeLink "waybar/.config/waybar" ../waybar/.config/waybar;
@@ -384,11 +298,6 @@ in {
       executable = true;
     };
 
-    ".local/bin/codex" = {
-      source = "${codex}/bin/codex";
-      executable = true;
-    };
-
     ".local/bin/open-with-fuzzy" = {
       source = makeLink "scripts/open-with-fuzzy" ../scripts/open-with-fuzzy;
       executable = true;
@@ -433,16 +342,8 @@ in {
       executable = true;
     };
 
-    # 6. Tmux (Single File)
-    ".tmux.conf".source = makeLink "tmux/.tmux.conf" ../tmux/.tmux.conf;
-
     # 7. Bash (Single File)
     ".mybashrc.sh".source = makeLink "bash/.mybashrc.sh" ../bash/.mybashrc.sh;
-
-    # Keep npm global installs out of the immutable Nix store.
-    ".npmrc".text = ''
-      prefix=${config.home.homeDirectory}/.local
-    '';
 
     # 8. Hyprland (Single File)
     ".config/hypr/hyprland.conf".source = makeLink "hypr/hyprland.conf" ../hypr/hyprland.conf;
@@ -722,9 +623,6 @@ in {
     };
   };
 
-  # Let Home Manager install and manage itself.
-  programs.home-manager.enable = true;
-
   # Enforce a global cursor theme to fix sizing/shape issues
   home.pointerCursor = {
     gtk.enable = true;
@@ -733,7 +631,4 @@ in {
     package = pkgs.adwaita-icon-theme;
     size = 24;
   };
-
-  # Don't change this without reading the Home Manager release notes!
-  home.stateVersion = "23.11";
 }

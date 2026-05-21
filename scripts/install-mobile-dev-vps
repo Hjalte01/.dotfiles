@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+server_ip="${1:-178.105.30.181}"
+target="root@${server_ip}"
+
+echo "Preparing nixos-install on ${target}..."
+ssh -F /dev/null "${target}" 'set -e; nix_bin="$(command -v nix)"; install_out="$("$nix_bin" --extra-experimental-features nix-command --extra-experimental-features flakes build nixpkgs#nixos-install --no-link --print-out-paths)"; ln -sf "$install_out/bin/nixos-install" /usr/local/bin/nixos-install; test -x /usr/local/bin/nixos-install'
+
+echo "Installing mobile-dev NixOS config on ${target}..."
+nix run github:nix-community/nixos-anywhere -- \
+  --phases disko,install,reboot \
+  --flake ~/.dotfiles#mobile-dev \
+  "${target}"

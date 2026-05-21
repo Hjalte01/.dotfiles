@@ -43,6 +43,7 @@
 
   # Enable networking
   networking.networkmanager.enable = true;
+  services.tailscale.enable = true;
 
   # Set your time zone.
   time.timeZone = "Europe/Copenhagen";
@@ -306,11 +307,18 @@
 
   # List services that you want to enable:
 
-  # Enable the OpenSSH daemon.
-  # services.openssh.enable = true;
+  # Enable SSH over Tailscale for phone access when the laptop is awake.
+  services.openssh = {
+    enable = true;
+    settings = {
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+    };
+  };
 
   # Open ports in the firewall.
   networking.firewall.allowedTCPPorts = [5900];
+  networking.firewall.trustedInterfaces = ["tailscale0"];
   # networking.firewall.allowedUDPPorts = [ ... ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;

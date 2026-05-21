@@ -36,7 +36,16 @@ PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 # ==========================================
 # 3. CLIPBOARD (Wayland)
 # ==========================================
-alias c='wl-copy'
+unalias c 2>/dev/null || true
+if command -v wl-copy >/dev/null 2>&1; then
+  c() {
+    if [ -t 0 ]; then
+      wl-copy "$@"
+    else
+      tee >(wl-copy "$@" >/dev/null)
+    fi
+  }
+fi
 alias p='wl-paste'
 alias v='wl-paste'
 
@@ -92,6 +101,42 @@ fi
 # ==========================================
 # 5. FUNCTIONS
 # ==========================================
+
+# Run a command, show its output, and copy both command + output to clipboard.
+# Usage: cmdc "ls -la | head"
+cmdc() {
+  if [ "$#" -eq 0 ]; then
+    printf 'Usage: cmdc "command to run"\n'
+    return 2
+  fi
+
+  local cmd tmp status
+  tmp="$(mktemp)" || return 1
+
+  if [ "$#" -eq 1 ]; then
+    cmd="$1"
+  else
+    printf -v cmd '%q ' "$@"
+    cmd="${cmd% }"
+  fi
+
+  printf '$ %s\n' "$cmd" | tee "$tmp"
+  eval "$cmd" 2>&1 | tee -a "$tmp"
+  status="${PIPESTATUS[0]}"
+
+  if wl-copy <"$tmp"; then
+    printf 'Copied command and output to clipboard'
+    if [ "$status" -ne 0 ]; then
+      printf ' (exit %s)' "$status"
+    fi
+    printf '.\n'
+  else
+    printf 'Failed to copy command output to clipboard.\n' >&2
+  fi
+
+  rm -f "$tmp"
+  return "$status"
+}
 
 # tldrf (tldr flags) e.g. ls -alF -> it will show line by line those flags
 tldrf() {
