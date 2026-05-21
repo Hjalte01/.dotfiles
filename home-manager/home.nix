@@ -344,6 +344,7 @@ in {
 
     # 7. Bash (Single File)
     ".mybashrc.sh".source = makeLink "bash/.mybashrc.sh" ../bash/.mybashrc.sh;
+    ".bash_desktop.sh".source = makeLink "bash/desktop.sh" ../bash/desktop.sh;
 
     # 8. Hyprland (Single File)
     ".config/hypr/hyprland.conf".source = makeLink "hypr/hyprland.conf" ../hypr/hyprland.conf;
@@ -583,9 +584,8 @@ in {
   programs.bash = {
     enable = true;
     initExtra = ''
-      # Load custom Omarchy configuration
-      if [ -f ~/.mybashrc.sh ]; then
-        source ~/.mybashrc.sh
+      if [ -f ~/.bash_desktop.sh ]; then
+        source ~/.bash_desktop.sh
       fi
     '';
   };
