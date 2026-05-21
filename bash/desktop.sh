@@ -15,28 +15,6 @@ alias nvimkeyb="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/config/keymaps.lua"
 
 alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"
 
-yaya() {
-  local INSTALL_SCRIPT="$HOME/omarchy-supplement/install-all.sh"
-  local MARKER="# INSERT_HERE"
-
-  for PACKAGE in "$@"; do
-    echo "---------------------------------"
-    echo "Attempting to install: $PACKAGE"
-    yay -S "$PACKAGE"
-
-    if pacman -Qi "$PACKAGE" >/dev/null 2>&1; then
-      if grep -q "\"$PACKAGE\"" "$INSTALL_SCRIPT"; then
-        echo "Installed, but '$PACKAGE' is already in your install list."
-      else
-        sed -i "/$MARKER/i \    \"$PACKAGE\"" "$INSTALL_SCRIPT"
-        echo "Success. Added '$PACKAGE' to your automation script."
-      fi
-    else
-      echo "Installation failed. Not added to script."
-    fi
-  done
-}
-
 history_pick() {
   local selected
   selected="$(
@@ -64,44 +42,6 @@ history_insert() {
 }
 
 bind -x '"\C-h": history_insert'
-
-WACOM_TOUCH_ID="0018:056A:5367.0003"
-WACOM_DRIVER_PATH="/sys/bus/hid/drivers/wacom"
-
-ts_disable() {
-  echo "Disabling Wacom Touchscreen..."
-  if [ -d "$WACOM_DRIVER_PATH/$WACOM_TOUCH_ID" ]; then
-    echo "$WACOM_TOUCH_ID" | sudo tee "$WACOM_DRIVER_PATH/unbind" >/dev/null
-    echo "Touchscreen Disabled."
-  else
-    echo "Touchscreen already disabled."
-  fi
-}
-
-ts_enable() {
-  echo "Enabling Wacom Touchscreen..."
-  if [ ! -d "$WACOM_DRIVER_PATH/$WACOM_TOUCH_ID" ]; then
-    echo "$WACOM_TOUCH_ID" | sudo tee "$WACOM_DRIVER_PATH/bind" >/dev/null
-    echo "Touchscreen Enabled."
-  else
-    echo "Touchscreen already enabled."
-  fi
-}
-
-alias venvsip='source $HOME/Documents/sip/venv/bin/activate'
-alias venvno='source $HOME/Documents/no/venv/bin/activate'
-
-auto_sip() {
-  cd "$HOME/Documents/sip/assignment_7/" || return
-  venvsip
-  nvim task
-}
-
-tf_sip() {
-  cd "$HOME/Documents/sip/assignment_8/task/" || return
-  source ../tf/venv/bin/activate
-  nvim .
-}
 
 nxb_old() {
   sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos
