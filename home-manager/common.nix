@@ -25,6 +25,8 @@ in {
     bubblewrap
     codex
     curl
+    delta
+    difftastic
     fd
     fzf
     gcc

@@ -164,6 +164,7 @@ in {
     zlib # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
     cliphist # Clipboard history
+    file # Detect text/image types for Codex clipboard history captures
     imv # billedeviser til wayland
     mpv # videoafspilere
     zathura # PDF/document viewer
