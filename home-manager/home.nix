@@ -212,6 +212,7 @@ in {
     blueman # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
 
     # For Fn-keys
+    keyd # Keyboard event monitor/remapping CLI
     brightnessctl # briightness
     playerctl #
     pavucontrol # sound/audio

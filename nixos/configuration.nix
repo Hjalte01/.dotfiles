@@ -157,6 +157,7 @@
   services.desktopManager.gnome.enable = true;
   services.gnome.gnome-keyring.enable = true;
   programs.seahorse.enable = true;
+  security.pam.services.gdm-password.enableGnomeKeyring = true;
 
   # Configure keymap in X11
   services.xserver.xkb = {
@@ -250,10 +251,32 @@
   services.keyd = {
     enable = true;
     keyboards = {
-      default = {
-        ids = ["05ac:024f" "*HAILUCK*"];
+      video-bus = {
+        ids = ["0000:0006"];
         settings = {
-          # Default state (Windows Mode)
+          main = {
+            brightnessdown = "brightnessdown";
+            brightnessup = "brightnessup";
+            switchvideomode = "M-t";
+          };
+        };
+      };
+      ideapad-extra-buttons = {
+        ids = ["0000:0000:5174864d"];
+        settings = {
+          main = {
+            micmute = "micmute";
+            rfkill = "noop";
+            switchvideomode = "M-t";
+            nextsong = "M-m";
+            f9 = "M-m";
+          };
+        };
+      };
+      split = {
+        ids = ["*HAILUCK*"];
+        settings = {
+          # Keep the split keyboard on the old mappings.
           main = {
             rightmeta = "rightalt";
             brightnessdown = "mute";
@@ -265,13 +288,10 @@
             previoussong = "playpause";
           };
 
-          # This layer activates automatically when Ctrl + Shift are held
           "control+shift" = {
-            # Pressing backspace while in this layer toggles the mac mode!
             backspace = "toggle(mac_mode)";
           };
 
-          # Hidden state (Mac Mode - activates when toggled)
           mac_mode = {
             leftalt = "leftmeta";
             leftmeta = "leftalt";

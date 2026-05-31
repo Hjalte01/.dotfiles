@@ -7,16 +7,16 @@
 }:
 stdenvNoCC.mkDerivation rec {
   pname = "codex-cli";
-  version = "0.132.0";
+  version = "0.135.0";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}.tgz";
-    hash = "sha512-OaTUz3oTbUP23I1yprQyaqO5LvlfWbTFIAI/JT2Hm0kgIsD+nKK14vauTzAt3zaeik6D7+meekCTuNdpU1dU2Q==";
+    hash = "sha256-WK0X6witZFyWer/KojO+ORoL2kMvmzybz0xsZtC4+6c=";
   };
 
   codexLinuxX64 = fetchurl {
     url = "https://registry.npmjs.org/@openai/codex/-/codex-${version}-linux-x64.tgz";
-    hash = "sha512-aGJPB+QkgtYQNQMlRGmE7oZstULu7k4trpux5r3CCZGPun4Xtwx3swtZXm7cWOVeTUkNfGCqdtCQ0bv6SKRiLA==";
+    hash = "sha256-AVsBpU7TSVGQu6ORCWeRlJtoxg4PFHqIw4mgQsuqy78=";
   };
 
   nativeBuildInputs = [
@@ -43,9 +43,17 @@ stdenvNoCC.mkDerivation rec {
     cp -R source/. "$package_root/"
     cp -R native/. "$native_root/"
 
-    chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/codex/codex"
-    chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/path/rg"
-    chmod +x "$native_root/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap"
+    for executable in \
+      "$native_root/vendor/x86_64-unknown-linux-musl/bin/codex" \
+      "$native_root/vendor/x86_64-unknown-linux-musl/codex/codex" \
+      "$native_root/vendor/x86_64-unknown-linux-musl/codex-path/rg" \
+      "$native_root/vendor/x86_64-unknown-linux-musl/path/rg" \
+      "$native_root/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap" \
+      "$native_root/vendor/x86_64-unknown-linux-musl/codex-resources/zsh/bin/zsh"; do
+      if [ -e "$executable" ]; then
+        chmod +x "$executable"
+      fi
+    done
 
     makeWrapper ${nodejs_22}/bin/node "$out/bin/codex" \
       --add-flags "$package_root/bin/codex.js"
