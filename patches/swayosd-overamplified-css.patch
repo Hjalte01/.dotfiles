@@ -1,0 +1,25 @@
+--- a/src/server/osd_window.rs
++++ b/src/server/osd_window.rs
+@@ -126,8 +126,7 @@
+ 			(false, x) if x > 33.0 && x <= 66.0 => "medium",
+ 			(false, x) if x > 66.0 && x <= 100.0 => "high",
+ 			(false, x) if x > 100.0 => match device_type {
+-				VolumeDeviceType::Sink(_) => "high",
+-				VolumeDeviceType::Source(_) => "overamplified",
++				VolumeDeviceType::Sink(_) | VolumeDeviceType::Source(_) => "overamplified",
+ 			},
+ 			(_, _) => "high",
+ 		};
+@@ -139,6 +138,12 @@
+ 		let progress = self.build_progress_widget(volume / max_volume);
+ 		let label = self.build_text_widget(Some(&format!("{}%", volume)), Some(4));
+ 
++		if !device.mute && volume > 100.0 {
++			icon.add_css_class("overamplified");
++			progress.add_css_class("overamplified");
++			label.add_css_class("overamplified");
++		}
++
+ 		progress.set_sensitive(!device.mute);
+ 
+ 		self.container.append(&icon);

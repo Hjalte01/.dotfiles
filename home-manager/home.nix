@@ -153,6 +153,12 @@
 
     doCheck = false;
   };
+
+  swayosdOveramplified = pkgs.swayosd.overrideAttrs (oldAttrs: {
+    patches = (oldAttrs.patches or []) ++ [
+      ../patches/swayosd-overamplified-css.patch
+    ];
+  });
 in {
   imports = [
     ./common.nix
@@ -209,7 +215,7 @@ in {
     brightnessctl # briightness
     playerctl #
     pavucontrol # sound/audio
-    swayosd # brightness/audio graphics
+    swayosdOveramplified # brightness/audio graphics
 
     grim # takes the picture
     slurp # Drags the captured picture
@@ -242,6 +248,9 @@ in {
 
     # 4. Mako notifications
     ".config/mako/config".source = makeLink "mako/config" ../mako/config;
+
+    ".config/swayosd/config.toml".source = makeLink "swayosd/config.toml" ../swayosd/config.toml;
+    ".config/swayosd/style.css".source = makeLink "swayosd/style.css" ../swayosd/style.css;
 
     # 5. Custom scripts
     ".local/bin/custom-keybinds" = {
