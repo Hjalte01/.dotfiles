@@ -30,6 +30,7 @@ in {
     fd
     fzf
     gcc
+    gh
     git
     glow
     jq
@@ -46,6 +47,7 @@ in {
     tree
     unzip
     wget
+    zsh
     zoxide
   ];
 
@@ -57,6 +59,21 @@ in {
 
     ".tmux.conf".source = ../tmux/.tmux.conf;
     ".bash_common.sh".source = ../bash/common.sh;
+
+    ".local/bin/gai" = {
+      source = ../scripts/gai;
+      executable = true;
+    };
+
+    ".config/lazygit/config.yml".text = ''
+      customCommands:
+        - key: "<c-c>"
+          context: "global"
+          description: "Generate AI commit message"
+          command: "zsh -ic 'gai'"
+          loadingText: "Generating AI commit message..."
+          output: terminal
+    '';
 
     ".npmrc".text = ''
       prefix=${config.home.homeDirectory}/.local
