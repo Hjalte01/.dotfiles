@@ -21,6 +21,17 @@
   # Permanently ignore ghost inputs from Wacom touchscreen
   services.udev.extraRules = ''
     ATTRS{name}=="*Wacom HID 5367*", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+
+    # Talon/Tobii eye tracker access. Talon's bundled installer cannot write
+    # this rule on NixOS because /etc is declarative.
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0127", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0118", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0106", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0128", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="010a", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0102", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0313", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0318", TAG+="uaccess"
   '';
 
   # Fonts
@@ -74,6 +85,8 @@
 
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
+  programs.hyprland.xwayland.enable = true;
+  programs.xwayland.enable = true;
   programs.wayvnc.enable = true;
 
   systemd.services.ydotoold = {

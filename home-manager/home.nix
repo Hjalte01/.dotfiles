@@ -159,6 +159,13 @@
       ../patches/swayosd-overamplified-css.patch
     ];
   });
+
+  talonCommunity = pkgs.fetchFromGitHub {
+    owner = "talonhub";
+    repo = "community";
+    rev = "641a0852752ad1ef2af1a4334aabda8e87d550f7";
+    sha256 = "043g8gzp40a2y3438biszs5xzxflddix27plr4mv5avr1djv13w1";
+  };
 in {
   imports = [
     ./common.nix
@@ -187,6 +194,7 @@ in {
     winetricks
 
     tor-browser
+    (pkgs.callPackage ../pkgs/talon.nix {})
 
     ghostty # Terminal
     tree-sitter # Nvim needs it
@@ -239,6 +247,11 @@ in {
   # ==========================================
   home.file = {
     # 2. Waybar (Directory - needs recursive)
+    ".talon/user/community" = {
+      source = talonCommunity;
+      recursive = true;
+    };
+
     ".config/waybar" = {
       source = makeLink "waybar/.config/waybar" ../waybar/.config/waybar;
       recursive = true;
