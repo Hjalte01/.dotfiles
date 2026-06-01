@@ -48,6 +48,7 @@ in {
     unzip
     wget
     zsh
+    zotero
     zoxide
   ];
 
@@ -65,15 +66,18 @@ in {
       executable = true;
     };
 
-    ".config/lazygit/config.yml".text = ''
-      customCommands:
-        - key: "<c-c>"
-          context: "global"
-          description: "Generate AI commit message"
-          command: "zsh -ic 'gai'"
-          loadingText: "Generating AI commit message..."
-          output: terminal
-    '';
+    ".config/lazygit/config.yml" = {
+      force = true;
+      text = ''
+        customCommands:
+          - key: "<c-c>"
+            context: "global"
+            description: "Generate AI commit message"
+            command: "zsh -ic 'gai'"
+            loadingText: "Generating AI commit message..."
+            output: terminal
+      '';
+    };
 
     ".npmrc".text = ''
       prefix=${config.home.homeDirectory}/.local
