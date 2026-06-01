@@ -1,8 +1,10 @@
 {
+  alsa-lib,
   dbus,
   fontconfig,
   lib,
   libGL,
+  libpulseaudio,
   libx11,
   libxcb,
   libxcursor,
@@ -14,6 +16,7 @@
   libxrandr,
   libxtst,
   makeWrapper,
+  sqlite,
   stdenv,
   systemd,
   zlib,
@@ -47,6 +50,7 @@ stdenv.mkDerivation {
           dbus
           fontconfig
           libGL
+          libpulseaudio
           libx11
           libxcb
           libxcursor
@@ -57,12 +61,18 @@ stdenv.mkDerivation {
           libxkbcommon
           libxrandr
           libxtst
+          sqlite
           stdenv.cc.cc.lib
           systemd
           zlib
         ]
       }" \
-      --prefix LD_LIBRARY_PATH : "$out/opt/talon/lib:$out/opt/talon/resources/python/lib:$out/opt/talon/resources/pypy/lib"
+      --prefix LD_LIBRARY_PATH : "${
+        lib.makeLibraryPath [
+          alsa-lib
+        ]
+      }" \
+      --prefix LD_LIBRARY_PATH : "$out/opt/talon/lib:$out/opt/talon/resources/python/lib:$out/opt/talon/resources/pypy/lib:$out/opt/talon/resources/python/lib/python3.11/site-packages/numpy.libs"
 
     runHook postInstall
   '';
