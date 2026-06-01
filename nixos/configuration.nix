@@ -287,7 +287,7 @@
         };
       };
       split = {
-        ids = ["*HAILUCK*"];
+        ids = ["05ac:024f" "*HAILUCK*"];
         settings = {
           # Keep the split keyboard on the old mappings.
           main = {
@@ -295,13 +295,19 @@
             brightnessdown = "mute";
             brightnessup = "volumedown";
             scale = "volumeup";
+            volumeup = "print";
             dashboard = "micmute";
             kbdillumdown = "brightnessdown";
             kbdillumup = "brightnessup";
             previoussong = "playpause";
+            f12 = "print";
           };
 
           "control+shift" = {
+            backspace = "toggle(mac_mode)";
+          };
+
+          "control+meta" = {
             backspace = "toggle(mac_mode)";
           };
 
