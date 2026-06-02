@@ -24,6 +24,7 @@ in {
     btop
     bubblewrap
     codex
+    cppman
     curl
     delta
     difftastic
@@ -43,6 +44,7 @@ in {
     ripgrep
     shellcheck
     shfmt
+    sqlite
     tmux
     tree
     unzip
@@ -74,6 +76,13 @@ in {
       source = ../nvim/.config/nvim;
       recursive = true;
     };
+
+    ".config/cppman/cppman.cfg".text = ''
+      [Settings]
+      source = cppreference.com
+      updatemanpath = false
+      pager = nvim
+    '';
 
     ".tmux.conf".source = ../tmux/.tmux.conf;
     ".bash_common.sh".source = ../bash/common.sh;
