@@ -90,7 +90,7 @@ in {
           - key: "<c-c>"
             context: "global"
             description: "Generate AI commit message"
-            command: "zsh -ic 'gai'"
+            command: "GAI_EXIT_LAZYGIT_IF_CLEAN=1 bash -ic 'gai'"
             loadingText: "Generating AI commit message..."
             output: terminal
       '';
@@ -109,8 +109,6 @@ in {
       fi
     '';
   };
-
-  programs.zsh.enable = true;
 
   programs.home-manager.enable = true;
 

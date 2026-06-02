@@ -207,6 +207,41 @@ edit_msg() {
   fi
 }
 
+worktree_has_uncommitted_changes() {
+  [ -n "$(command git status --porcelain --untracked-files=normal)" ]
+}
+
+find_lazygit_ancestor() {
+  local pid command_name parent_pid
+  pid="$PPID"
+
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+    command_name="$(ps -o comm= -p "$pid" 2>/dev/null || true)"
+    command_name="${command_name##*/}"
+    if [ "$command_name" = "lazygit" ]; then
+      printf '%s\n' "$pid"
+      return 0
+    fi
+
+    parent_pid="$(ps -o ppid= -p "$pid" 2>/dev/null || true)"
+    parent_pid="${parent_pid//[[:space:]]/}"
+    [ "$parent_pid" != "$pid" ] || break
+    pid="$parent_pid"
+  done
+
+  return 1
+}
+
+exit_lazygit_if_worktree_clean() {
+  local lazygit_pid
+
+  [ "${GAI_EXIT_LAZYGIT_IF_CLEAN:-0}" = "1" ] || return 0
+  worktree_has_uncommitted_changes && return 0
+
+  lazygit_pid="$(find_lazygit_ancestor)" || return 0
+  kill -TERM "$lazygit_pid" 2>/dev/null || true
+}
+
 print_auth_hint() {
   if [ -n "$GAI_LAST_ERROR" ]; then
     echo "Copilot error:"
@@ -288,6 +323,7 @@ while true; do
   case "${ans:-Y}" in
     Y | y | yes | YES)
       command git commit -m "$msg"
+      exit_lazygit_if_worktree_clean
       break
       ;;
     e | E | edit)
