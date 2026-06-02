@@ -315,6 +315,9 @@
       KbdInteractiveAuthentication = false;
     };
   };
+  
+  # Discord bot timer
+  services.cron.enable = true;
 
   # Open ports in the firewall.
   networking.firewall.allowedTCPPorts = [5900];

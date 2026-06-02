@@ -82,6 +82,8 @@
   };
 
   services.tailscale.enable = true;
+  services.cron.enable = true;
+
   networking.firewall = {
     enable = true;
     trustedInterfaces = ["tailscale0"];
@@ -89,7 +91,9 @@
   };
 
   environment.systemPackages = with pkgs; [
+    cacert
     git
+    python3
     tailscale
     vim
   ];
