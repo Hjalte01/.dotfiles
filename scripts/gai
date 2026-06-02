@@ -6,6 +6,8 @@ valid_types="feat fix refactor docs test chore perf ci build style revert"
 
 # Model used by the fast direct Copilot API path. Override with GAI_MODEL.
 : "${GAI_MODEL:=gpt-4o-mini}"
+: "${GAI_CLI_FALLBACK:=0}"
+GAI_LAST_ERROR=""
 
 if ! command git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "Not inside a git repository."
@@ -46,11 +48,38 @@ fi
 
 copilot_token_cache="${TMPDIR:-/tmp}/gai-copilot-token-$(id -u).json"
 
+_gai_oauth_token() {
+  local apps oauth
+
+  if [ -n "${GITHUB_COPILOT_TOKEN:-}" ]; then
+    printf '%s\n' "$GITHUB_COPILOT_TOKEN"
+    return 0
+  fi
+
+  if [ -n "${GH_COPILOT_TOKEN:-}" ]; then
+    printf '%s\n' "$GH_COPILOT_TOKEN"
+    return 0
+  fi
+
+  apps="$HOME/.config/github-copilot/apps.json"
+  if [ -f "$apps" ]; then
+    oauth="$(jq -r '[..|.oauth_token? // empty] | .[0] // empty' "$apps" 2>/dev/null || true)"
+    if [ -n "$oauth" ]; then
+      printf '%s\n' "$oauth"
+      return 0
+    fi
+  fi
+
+  command -v gh >/dev/null 2>&1 || return 1
+  gh auth status >/dev/null 2>&1 || return 1
+  gh auth token 2>/dev/null
+}
+
 _gai_copilot_token() {
   command -v jq >/dev/null 2>&1 || return 1
   command -v curl >/dev/null 2>&1 || return 1
 
-  local now exp tok api apps oauth resp
+  local now exp tok api oauth resp
   now="$(date +%s)"
 
   if [ -f "$copilot_token_cache" ]; then
@@ -65,9 +94,7 @@ _gai_copilot_token() {
     fi
   fi
 
-  apps="$HOME/.config/github-copilot/apps.json"
-  [ -f "$apps" ] || return 1
-  oauth="$(jq -r '[..|.oauth_token? // empty] | .[0] // empty' "$apps" 2>/dev/null || true)"
+  oauth="$(_gai_oauth_token)" || return 1
   [ -n "$oauth" ] || return 1
 
   resp="$(curl -sS --max-time 10 \
@@ -105,8 +132,19 @@ _gai_via_api() {
   printf '%s\n' "$content"
 }
 
+_gai_via_cli() {
+  local prompt="$1"
+  local cli="$HOME/.local/share/gh/copilot/copilot"
+
+  if [ -x "$cli" ]; then
+    "$cli" -s -p "$prompt"
+  else
+    gh copilot -- -s -p "$prompt"
+  fi
+}
+
 generate_msg() {
-  local prompt raw
+  local prompt raw err_file status
   prompt="$(
     cat <<PROMPT
 Output MUST be exactly ONE line and NOTHING ELSE.
@@ -133,9 +171,22 @@ PROMPT
 
   echo "Generating commit message..." >&2
 
+  GAI_LAST_ERROR=""
   raw="$(_gai_via_api "$prompt" 2>/dev/null || true)"
   if [ -z "$raw" ]; then
-    raw="$(gh copilot -- -s -p "$prompt" 2>/dev/null || true)"
+    if [ "$GAI_CLI_FALLBACK" = "1" ]; then
+      err_file="$(mktemp)" || return 1
+      set +e
+      raw="$(_gai_via_cli "$prompt" 2>"$err_file")"
+      status="$?"
+      set -e
+      if [ "$status" -ne 0 ] || [ -z "$raw" ]; then
+        GAI_LAST_ERROR="$(awk 'NF {print}' "$err_file" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | head -n 6)"
+      fi
+      rm -f "$err_file"
+    else
+      GAI_LAST_ERROR="Fast Copilot token unavailable. Run :Copilot auth in Neovim, or set GITHUB_COPILOT_TOKEN/GH_COPILOT_TOKEN from :Copilot auth info. Set GAI_CLI_FALLBACK=1 to allow the slow Copilot CLI fallback."
+    fi
   fi
 
   printf "%s\n" "$raw" |
@@ -156,11 +207,27 @@ edit_msg() {
   fi
 }
 
+print_auth_hint() {
+  if [ -n "$GAI_LAST_ERROR" ]; then
+    echo "Copilot error:"
+    printf "%s\n" "$GAI_LAST_ERROR" | sed 's/^/  /'
+    echo
+  fi
+
+  if [ ! -f "$HOME/.config/github-copilot/apps.json" ] && ! gh auth status >/dev/null 2>&1; then
+    echo "No Copilot auth found."
+    echo "Either sign in to Copilot.nvim so ~/.config/github-copilot/apps.json exists,"
+    echo "or run gh auth login and make sure GitHub Copilot CLI can run."
+    echo
+  fi
+}
+
 msg="$(generate_msg)"
 
 while true; do
   if [ -z "$msg" ]; then
     echo "Copilot returned an empty response."
+    print_auth_hint
     echo
     printf "  [r]etry  [m]anual  [q]uit: "
     read -r choice
