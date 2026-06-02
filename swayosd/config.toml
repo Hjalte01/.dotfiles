@@ -1,0 +1,6 @@
+[server]
+max_volume = 150
+min_brightness = 5
+show_percentage = true
+style = "/home/hjalte/.config/swayosd/style.css"
+

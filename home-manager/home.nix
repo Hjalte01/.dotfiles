@@ -153,6 +153,19 @@
 
     doCheck = false;
   };
+
+  swayosdOveramplified = pkgs.swayosd.overrideAttrs (oldAttrs: {
+    patches = (oldAttrs.patches or []) ++ [
+      ../patches/swayosd-overamplified-css.patch
+    ];
+  });
+
+  talonCommunity = pkgs.fetchFromGitHub {
+    owner = "talonhub";
+    repo = "community";
+    rev = "641a0852752ad1ef2af1a4334aabda8e87d550f7";
+    sha256 = "043g8gzp40a2y3438biszs5xzxflddix27plr4mv5avr1djv13w1";
+  };
 in {
   imports = [
     ./common.nix
@@ -164,6 +177,7 @@ in {
     zlib # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
     cliphist # Clipboard history
+    file # Detect text/image types for Codex clipboard history captures
     imv # billedeviser til wayland
     mpv # videoafspilere
     zathura # PDF/document viewer
@@ -180,6 +194,7 @@ in {
     winetricks
 
     tor-browser
+    (pkgs.callPackage ../pkgs/talon.nix {})
 
     ghostty # Terminal
     tree-sitter # Nvim needs it
@@ -205,10 +220,12 @@ in {
     blueman # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
 
     # For Fn-keys
+    keyd # Keyboard event monitor/remapping CLI
     brightnessctl # briightness
     playerctl #
     pavucontrol # sound/audio
-    swayosd # brightness/audio graphics
+    easyeffects # PipeWire microphone/speaker effects
+    swayosdOveramplified # brightness/audio graphics
 
     grim # takes the picture
     slurp # Drags the captured picture
@@ -231,6 +248,21 @@ in {
   # ==========================================
   home.file = {
     # 2. Waybar (Directory - needs recursive)
+    ".talon/user/community" = {
+      source = talonCommunity;
+      recursive = true;
+    };
+
+    ".talon/user/local/microphone-selection-key.talon".text = ''
+      key(ctrl-alt-.): user.microphone_selection_toggle()
+    '';
+
+    ".talon/user/local/escape-cancel.talon".text = ''
+      key(escape):
+          user.cancel_current_phrase()
+          key(escape)
+    '';
+
     ".config/waybar" = {
       source = makeLink "waybar/.config/waybar" ../waybar/.config/waybar;
       recursive = true;
@@ -241,6 +273,9 @@ in {
 
     # 4. Mako notifications
     ".config/mako/config".source = makeLink "mako/config" ../mako/config;
+
+    ".config/swayosd/config.toml".source = makeLink "swayosd/config.toml" ../swayosd/config.toml;
+    ".config/swayosd/style.css".source = makeLink "swayosd/style.css" ../swayosd/style.css;
 
     # 5. Custom scripts
     ".local/bin/custom-keybinds" = {
@@ -295,6 +330,27 @@ in {
 
     ".local/bin/math-ocr" = {
       source = makeLink "scripts/math-ocr" ../scripts/math-ocr;
+      executable = true;
+    };
+
+    ".local/bin/talon-microphone-menu" = {
+      text = ''
+        #!/bin/sh
+        set -eu
+
+        if [ ! -S "$HOME/.talon/.sys/repl.sock" ]; then
+          ${pkgs.libnotify}/bin/notify-send "Talon is not running" "Start Talon before opening the microphone picker."
+          exit 1
+        fi
+
+        if ! printf '%s\n' \
+          'from talon import actions' \
+          'actions.user.microphone_selection_toggle()' \
+          | "$HOME/.talon/.venv/bin/repl" >/tmp/talon-microphone-menu.log 2>&1; then
+          ${pkgs.libnotify}/bin/notify-send "Talon microphone picker failed" "See /tmp/talon-microphone-menu.log"
+          exit 1
+        fi
+      '';
       executable = true;
     };
 

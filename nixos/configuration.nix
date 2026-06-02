@@ -21,6 +21,17 @@
   # Permanently ignore ghost inputs from Wacom touchscreen
   services.udev.extraRules = ''
     ATTRS{name}=="*Wacom HID 5367*", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+
+    # Talon/Tobii eye tracker access. Talon's bundled installer cannot write
+    # this rule on NixOS because /etc is declarative.
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0127", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0118", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0106", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0128", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="010a", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0102", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0313", TAG+="uaccess"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0318", TAG+="uaccess"
   '';
 
   # Fonts
@@ -74,6 +85,8 @@
 
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
+  programs.hyprland.xwayland.enable = true;
+  programs.xwayland.enable = true;
   programs.wayvnc.enable = true;
 
   systemd.services.ydotoold = {
@@ -157,6 +170,7 @@
   services.desktopManager.gnome.enable = true;
   services.gnome.gnome-keyring.enable = true;
   programs.seahorse.enable = true;
+  security.pam.services.gdm-password.enableGnomeKeyring = true;
 
   # Configure keymap in X11
   services.xserver.xkb = {
@@ -219,7 +233,7 @@
       "app.shield.optoutstudies.enabled" = false;
       "datareporting.healthreport.uploadEnabled" = false;
       "datareporting.policy.dataSubmissionEnabled" = false;
-      "general.autoScroll" = true;
+      "general.autoScroll" = false;
       "general.smoothScroll" = true;
       "general.smoothScroll.lines" = true;
       "general.smoothScroll.lines.durationMaxMS" = 300;
@@ -250,28 +264,53 @@
   services.keyd = {
     enable = true;
     keyboards = {
-      default = {
+      video-bus = {
+        ids = ["0000:0006"];
+        settings = {
+          main = {
+            brightnessdown = "brightnessdown";
+            brightnessup = "brightnessup";
+            switchvideomode = "M-t";
+          };
+        };
+      };
+      ideapad-extra-buttons = {
+        ids = ["0000:0000:5174864d"];
+        settings = {
+          main = {
+            micmute = "micmute";
+            rfkill = "noop";
+            switchvideomode = "M-t";
+            nextsong = "M-m";
+            f9 = "M-m";
+          };
+        };
+      };
+      split = {
         ids = ["05ac:024f" "*HAILUCK*"];
         settings = {
-          # Default state (Windows Mode)
+          # Keep the split keyboard on the old mappings.
           main = {
             rightmeta = "rightalt";
             brightnessdown = "mute";
             brightnessup = "volumedown";
             scale = "volumeup";
+            volumeup = "print";
             dashboard = "micmute";
             kbdillumdown = "brightnessdown";
             kbdillumup = "brightnessup";
             previoussong = "playpause";
+            f12 = "print";
           };
 
-          # This layer activates automatically when Ctrl + Shift are held
           "control+shift" = {
-            # Pressing backspace while in this layer toggles the mac mode!
             backspace = "toggle(mac_mode)";
           };
 
-          # Hidden state (Mac Mode - activates when toggled)
+          "control+meta" = {
+            backspace = "toggle(mac_mode)";
+          };
+
           mac_mode = {
             leftalt = "leftmeta";
             leftmeta = "leftalt";

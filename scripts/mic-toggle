@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_id="${MIC_SOURCE_ID:-}"
+
+if [[ -z "$source_id" ]]; then
+  source_id="$(
+    wpctl status | awk '
+      /^Audio/ { audio = 1; next }
+      /^Video/ { audio = 0; sources = 0 }
+      audio && /Sources:/ { sources = 1; next }
+      audio && /Filters:/ { sources = 0 }
+      sources && match($0, /[0-9]+\./) {
+        print substr($0, RSTART, RLENGTH - 1)
+        exit
+      }
+    '
+  )"
+fi
+
+if [[ -z "$source_id" ]]; then
+  swayosd-client --custom-message "No microphone" --custom-icon microphone-sensitivity-muted-symbolic || true
+  exit 1
+fi
+
+wpctl set-mute "$source_id" toggle
+
+if wpctl get-volume "$source_id" | grep -q MUTED; then
+  swayosd-client --custom-message "Mic muted" --custom-icon microphone-sensitivity-muted-symbolic || true
+else
+  swayosd-client --custom-message "Mic on" --custom-icon microphone-sensitivity-high-symbolic || true
+fi

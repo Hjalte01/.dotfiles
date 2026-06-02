@@ -96,6 +96,25 @@ tooltip {
     background-color: rgba(0, 0, 0, 0.0);
 }
 
+menu,
+popover,
+tooltip {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    border: 1px solid rgba(205, 214, 244, 0.25);
+    border-radius: 6px;
+}
+
+menu menuitem,
+popover * {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+}
+
+menu menuitem:hover {
+    background-color: #313244;
+}
+
 #workspaces button.active {
     border: 1px solid #ffffff;
     border-radius: 50%;

@@ -26,6 +26,13 @@ run_step "display mode" env DISPLAY_MENU_QUIET=1 /home/hjalte/.local/bin/display
 run_step "Waybar" systemctl --user restart waybar.service
 run_step "clipboard history" systemctl --user restart cliphist-text.service cliphist-image.service
 
+restart_swayosd() {
+  pkill -x swayosd-server >/dev/null 2>&1 || true
+  swayosd-server >/dev/null 2>&1 &
+}
+
+run_step "SwayOSD" restart_swayosd
+
 start_mako() {
   mako >/dev/null 2>&1 &
 }
@@ -39,5 +46,5 @@ fi
 if ((${#failures[@]})); then
   notify "Reloaded with issues: ${failures[*]}"
 else
-  notify "Hyprland, Waybar, mako, and clipboard history reloaded"
+  notify "Hyprland, Waybar, SwayOSD, mako, and clipboard history reloaded"
 fi

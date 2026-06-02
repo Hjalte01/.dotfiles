@@ -34,6 +34,44 @@ alias flake='nvim ~/.dotfiles/flake.nix'
 alias cx='codex'
 alias ta='tmux new-session -A -s main'
 
+gdiff() {
+  if command -v delta >/dev/null 2>&1; then
+    if [ "$#" -eq 0 ]; then
+      {
+        git diff --quiet || { printf '\n# Unstaged changes\n\n'; git diff --color=always; }
+        git diff --cached --quiet || { printf '\n# Staged changes\n\n'; git diff --cached --color=always; }
+      } | delta --paging=always
+    else
+      git diff --color=always "$@" | delta --paging=always
+    fi
+  else
+    if [ "$#" -eq 0 ]; then
+      git diff --quiet || { printf '\n# Unstaged changes\n\n'; git diff; }
+      git diff --cached --quiet || { printf '\n# Staged changes\n\n'; git diff --cached; }
+    else
+      git diff "$@"
+    fi
+  fi
+}
+
+gdiffs() {
+  if [ "$#" -eq 0 ]; then
+    git diff --quiet || { printf '\n# Unstaged changes\n\n'; git diff --stat; }
+    git diff --cached --quiet || { printf '\n# Staged changes\n\n'; git diff --cached --stat; }
+  else
+    git diff --stat "$@"
+  fi
+}
+
+gsyntax() {
+  if command -v difft >/dev/null 2>&1; then
+    difft "$@"
+  else
+    printf 'difftastic is not installed in this shell.\n' >&2
+    return 127
+  fi
+}
+
 alias_str=".."
 cmd_str="cd .."
 for i in $(seq 1 10); do
