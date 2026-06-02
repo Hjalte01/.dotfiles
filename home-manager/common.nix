@@ -53,6 +53,23 @@ in {
   ];
 
   home.file = {
+    ".codex/AGENTS.md".text = ''
+      # Default Codex Context
+
+      - The system is NixOS managed from `/home/hjalte/.dotfiles`.
+      - Prefer reproducible, declarative NixOS/Home Manager changes over manual setup.
+      - Shared configuration should live as high as practical in the shared/general profile, especially in `home-manager/common.nix`, so both the main PC and mobile VPS can reuse it.
+      - Host-specific changes should stay in the relevant PC or mobile VPS modules.
+      - Manual fixes are acceptable only when a declarative solution is not practical yet; when possible, leave the work in a state that can be made reproducible later.
+
+      ## Shared Context Locations
+
+      - `/home/hjalte/Pictures/Screenshots` is a common place to check for recent images or screenshots.
+      - `/home/hjalte/Documents/Codex-Inbox` is used for sharing captures and images with Codex.
+      - In `Codex-Inbox`, prefer active context only: read `ACTIVE/`, `ACTIVE_CONTEXT.txt`, or files named with `ACTIVE` unless the user asks for older context.
+      - If the user refers to a recent screenshot or capture without a precise filename, check file dates and active inbox markers before asking for clarification.
+    '';
+
     ".config/nvim" = {
       source = ../nvim/.config/nvim;
       recursive = true;
