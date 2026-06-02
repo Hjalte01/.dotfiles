@@ -224,6 +224,7 @@ in {
     brightnessctl # briightness
     playerctl #
     pavucontrol # sound/audio
+    easyeffects # PipeWire microphone/speaker effects
     swayosdOveramplified # brightness/audio graphics
 
     grim # takes the picture
@@ -251,6 +252,16 @@ in {
       source = talonCommunity;
       recursive = true;
     };
+
+    ".talon/user/local/microphone-selection-key.talon".text = ''
+      key(ctrl-alt-.): user.microphone_selection_toggle()
+    '';
+
+    ".talon/user/local/escape-cancel.talon".text = ''
+      key(escape):
+          user.cancel_current_phrase()
+          key(escape)
+    '';
 
     ".config/waybar" = {
       source = makeLink "waybar/.config/waybar" ../waybar/.config/waybar;
@@ -319,6 +330,27 @@ in {
 
     ".local/bin/math-ocr" = {
       source = makeLink "scripts/math-ocr" ../scripts/math-ocr;
+      executable = true;
+    };
+
+    ".local/bin/talon-microphone-menu" = {
+      text = ''
+        #!/bin/sh
+        set -eu
+
+        if [ ! -S "$HOME/.talon/.sys/repl.sock" ]; then
+          ${pkgs.libnotify}/bin/notify-send "Talon is not running" "Start Talon before opening the microphone picker."
+          exit 1
+        fi
+
+        if ! printf '%s\n' \
+          'from talon import actions' \
+          'actions.user.microphone_selection_toggle()' \
+          | "$HOME/.talon/.venv/bin/repl" >/tmp/talon-microphone-menu.log 2>&1; then
+          ${pkgs.libnotify}/bin/notify-send "Talon microphone picker failed" "See /tmp/talon-microphone-menu.log"
+          exit 1
+        fi
+      '';
       executable = true;
     };
 
