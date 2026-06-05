@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+output="${IDLE_MONITOR_OUTPUT:-idle}"
+workspaces_json="$(hyprctl workspaces -j 2>/dev/null || true)"
+
+if jq -e --arg output "$output" 'any(.[]; .monitor == $output and .name == "10" and .windows > 0)' <<<"$workspaces_json" >/dev/null 2>&1; then
+  printf '{"text":"10","class":"idle-active","tooltip":"Idle workspace is in use"}\n'
+else
+  printf '{"text":"","tooltip":""}\n'
+fi

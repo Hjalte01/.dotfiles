@@ -2,10 +2,17 @@
   "reload_style_on_change": true,
   "layer": "top",
   "position": "top",
+  "output": [
+    "eDP-1",
+    "HDMI-A-1",
+    "DP-1",
+    "DP-2"
+  ],
   "spacing": 0,
   "height": 26,
   "modules-left": [
-    "hyprland/workspaces"
+    "hyprland/workspaces",
+    "custom/idle-workspace"
   ],
   "modules-center": [
     "clock"
@@ -36,6 +43,12 @@
       "10": "0",
       "active": "󱓻"
     },
+  },
+  "custom/idle-workspace": {
+    "exec": "$HOME/.local/bin/idle-workspace-status",
+    "return-type": "json",
+    "interval": 2,
+    "format": "{}"
   },
   "cpu": {
     "interval": 5,

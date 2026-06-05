@@ -311,6 +311,21 @@ in {
       executable = true;
     };
 
+    ".local/bin/idle-monitor-toggle" = {
+      source = makeLink "scripts/idle-monitor-toggle" ../scripts/idle-monitor-toggle;
+      executable = true;
+    };
+
+    ".local/bin/idle-workspace-status" = {
+      source = makeLink "scripts/idle-workspace-status" ../scripts/idle-workspace-status;
+      executable = true;
+    };
+
+    ".local/bin/workspace-dispatch" = {
+      source = makeLink "scripts/workspace-dispatch" ../scripts/workspace-dispatch;
+      executable = true;
+    };
+
     ".local/bin/system-menu" = {
       source = makeLink "scripts/system-menu" ../scripts/system-menu;
       executable = true;

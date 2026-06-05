@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+output="${IDLE_MONITOR_OUTPUT:-idle}"
+mode="${IDLE_MONITOR_MODE:-1920x1080@60}"
+position="${IDLE_MONITOR_POSITION:-auto-right}"
+scale="${IDLE_MONITOR_SCALE:-1}"
+idle_workspace="${IDLE_MONITOR_WORKSPACE:-name:10}"
+fallback_workspace="${IDLE_MONITOR_FALLBACK_WORKSPACE:-10}"
+
+notify() {
+  notify-send "Idle monitor" "$1" -t 2500 || true
+}
+
+is_enabled() {
+  hyprctl monitors all -j | jq -e --arg output "$output" 'any(.[]; .name == $output)' >/dev/null
+}
+
+enable_idle_monitor() {
+  if ! is_enabled; then
+    hyprctl output create headless "$output" >/dev/null
+    hyprctl keyword monitor "$output, $mode, $position, $scale" >/dev/null
+  fi
+}
+
+move_idle_windows_back() {
+  local target_workspace="${1:-$fallback_workspace}"
+  local address
+  local moved=0
+
+  while IFS= read -r address; do
+    [[ -z "$address" ]] && continue
+    hyprctl dispatch movetoworkspacesilent "$target_workspace,address:$address" >/dev/null
+    moved=1
+  done < <(
+    hyprctl clients -j \
+      | jq -r --arg output "$output" '.[] | select(.monitor == $output and .workspace.name == "10") | .address'
+  )
+
+  return "$((1 - moved))"
+}
+
+active_workspace() {
+  hyprctl activeworkspace -j | jq -r '.name'
+}
+
+case "${1:-toggle}" in
+  move-window)
+    enable_idle_monitor
+    hyprctl dispatch movetoworkspacesilent "$idle_workspace" >/dev/null
+    hyprctl dispatch workspace "$idle_workspace" >/dev/null
+    notify "Moved window to idle workspace"
+    ;;
+  recall-windows)
+    target_workspace="$(active_workspace)"
+    if move_idle_windows_back "$target_workspace"; then
+      notify "Moved idle window back to workspace $target_workspace"
+    else
+      notify "No idle window to move back"
+    fi
+    ;;
+  toggle)
+    if is_enabled; then
+      move_idle_windows_back || true
+      hyprctl output remove "$output" >/dev/null
+      notify "Disabled virtual monitor"
+    else
+      enable_idle_monitor
+      notify "Enabled virtual monitor"
+    fi
+    ;;
+  *)
+    printf 'Usage: %s [toggle|move-window|recall-windows]\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac

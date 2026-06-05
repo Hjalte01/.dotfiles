@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+action="${1:-}"
+workspace="${2:-}"
+idle_output="${IDLE_MONITOR_OUTPUT:-idle}"
+visible_monitor="${IDLE_MONITOR_VISIBLE_MONITOR:-eDP-1}"
+idle_mode="${IDLE_MONITOR_MODE:-1920x1080@60}"
+idle_position="${IDLE_MONITOR_POSITION:-auto-right}"
+idle_scale="${IDLE_MONITOR_SCALE:-1}"
+
+usage() {
+  printf 'Usage: %s switch|move WORKSPACE\n' "${0##*/}" >&2
+  exit 2
+}
+
+[[ -n "$action" && -n "$workspace" ]] || usage
+
+active_monitor() {
+  hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n 1
+}
+
+ensure_idle_monitor() {
+  if ! hyprctl monitors all -j | jq -e --arg output "$idle_output" 'any(.[]; .name == $output)' >/dev/null; then
+    hyprctl output create headless "$idle_output" >/dev/null
+    hyprctl keyword monitor "$idle_output, $idle_mode, $idle_position, $idle_scale" >/dev/null
+  fi
+}
+
+focus_visible_monitor() {
+  if hyprctl monitors all -j | jq -e --arg monitor "$visible_monitor" 'any(.[]; .name == $monitor)' >/dev/null; then
+    hyprctl dispatch focusmonitor "$visible_monitor" >/dev/null
+    return
+  fi
+
+  local fallback_monitor
+  fallback_monitor="$(
+    hyprctl monitors -j \
+      | jq -r --arg idle "$idle_output" '.[] | select(.name != $idle) | .name' \
+      | head -n 1
+  )"
+
+  [[ -n "$fallback_monitor" ]] && hyprctl dispatch focusmonitor "$fallback_monitor" >/dev/null
+}
+
+active_window_address() {
+  hyprctl activewindow -j 2>/dev/null | jq -r '.address // empty'
+}
+
+case "$action" in
+  switch)
+    if [[ "$workspace" == "10" ]]; then
+      ensure_idle_monitor
+      hyprctl dispatch workspace name:10 >/dev/null
+      exit 0
+    fi
+
+    if [[ "$(active_monitor)" == "$idle_output" ]]; then
+      focus_visible_monitor
+    fi
+
+    hyprctl dispatch workspace "$workspace" >/dev/null
+    ;;
+  move)
+    if [[ "$workspace" == "10" ]]; then
+      /home/hjalte/.local/bin/idle-monitor-toggle move-window
+      exit 0
+    fi
+
+    if [[ "$(active_monitor)" == "$idle_output" ]]; then
+      address="$(active_window_address)"
+      focus_visible_monitor
+      hyprctl dispatch workspace "$workspace" >/dev/null
+
+      if [[ -n "$address" && "$address" != "0x" ]]; then
+        hyprctl dispatch movetoworkspacesilent "$workspace,address:$address" >/dev/null
+        hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
+      fi
+    else
+      hyprctl dispatch movetoworkspace "$workspace" >/dev/null
+    fi
+    ;;
+  *)
+    usage
+    ;;
+esac

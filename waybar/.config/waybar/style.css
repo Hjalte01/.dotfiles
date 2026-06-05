@@ -25,6 +25,17 @@
   min-width: 9px;
 }
 
+#custom-idle-workspace {
+  padding: 0 6px;
+  margin: 0 1.5px;
+  min-width: 9px;
+}
+
+#custom-idle-workspace.idle-active {
+  color: #00d7ff;
+  font-weight: bold;
+}
+
 #workspaces button.empty {
   opacity: 0.5;
 }
