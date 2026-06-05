@@ -226,6 +226,7 @@ in {
     brightnessctl # briightness
     playerctl #
     pavucontrol # sound/audio
+    pulseaudio # Provides pactl for muting per-app PipeWire playback streams
     easyeffects # PipeWire microphone/speaker effects
     swayosdOveramplified # brightness/audio graphics
 
@@ -353,6 +354,11 @@ in {
 
     ".local/bin/easyeffects-start-bypassed" = {
       source = makeLink "scripts/easyeffects-start-bypassed" ../scripts/easyeffects-start-bypassed;
+      executable = true;
+    };
+
+    ".local/bin/app-audio-mute" = {
+      source = makeLink "scripts/app-audio-mute" ../scripts/app-audio-mute;
       executable = true;
     };
 

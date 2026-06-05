@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+notify() {
+  local message="$1"
+  local icon="$2"
+
+  if command -v swayosd-client >/dev/null 2>&1; then
+    swayosd-client --custom-message "$message" --custom-icon "$icon" || true
+  elif command -v notify-send >/dev/null 2>&1; then
+    notify-send "$message" || true
+  fi
+}
+
+process_has_ancestor() {
+  local pid="$1"
+  local ancestor="$2"
+  local parent
+
+  [[ "$pid" =~ ^[0-9]+$ && "$ancestor" =~ ^[0-9]+$ ]] || return 1
+
+  while [[ "$pid" != "0" && -r "/proc/$pid/stat" ]]; do
+    [[ "$pid" == "$ancestor" ]] && return 0
+    parent="$(awk '{ print $4 }' "/proc/$pid/stat" 2>/dev/null || true)"
+    [[ -n "$parent" && "$parent" != "$pid" ]] || return 1
+    pid="$parent"
+  done
+
+  return 1
+}
+
+related_processes() {
+  local active_pid="$1"
+  local stream_pid="$2"
+
+  [[ "$active_pid" == "$stream_pid" ]] \
+    || process_has_ancestor "$stream_pid" "$active_pid" \
+    || process_has_ancestor "$active_pid" "$stream_pid"
+}
+
+sink_inputs() {
+  pactl list sink-inputs | awk '
+    function emit() {
+      if (id != "") {
+        print id "\t" pid "\t" mute "\t" name
+      }
+    }
+
+    /^Sink Input #/ {
+      emit()
+      id = $3
+      sub(/^#/, "", id)
+      pid = ""
+      mute = ""
+      name = ""
+      next
+    }
+
+    /^[ \t]*Mute:/ {
+      mute = $2
+      next
+    }
+
+    /application\.process\.id =/ {
+      gsub(/"/, "")
+      pid = $3
+      next
+    }
+
+    /application\.name =/ {
+      name = $0
+      sub(/^[ \t]*application\.name = "/, "", name)
+      sub(/"$/, "", name)
+      next
+    }
+
+    END {
+      emit()
+    }
+  '
+}
+
+if ! command -v pactl >/dev/null 2>&1; then
+  notify "pactl is not installed" audio-volume-muted-symbolic
+  exit 1
+fi
+
+active_window="$(hyprctl activewindow -j 2>/dev/null || true)"
+active_pid="$(jq -r '.pid // empty' <<<"$active_window")"
+active_name="$(jq -r '.class // .title // "Active app"' <<<"$active_window")"
+
+if [[ -z "$active_pid" || "$active_pid" == "null" ]]; then
+  notify "No active app" audio-volume-muted-symbolic
+  exit 1
+fi
+
+matching_ids=()
+matching_mutes=()
+
+while IFS=$'\t' read -r input_id stream_pid mute _name; do
+  [[ -n "$input_id" && -n "$stream_pid" ]] || continue
+
+  if related_processes "$active_pid" "$stream_pid"; then
+    matching_ids+=("$input_id")
+    matching_mutes+=("$mute")
+  fi
+done < <(sink_inputs)
+
+if ((${#matching_ids[@]} == 0)); then
+  notify "No audio stream for $active_name" audio-volume-muted-symbolic
+  exit 1
+fi
+
+target_mute=0
+message="$active_name unmuted"
+icon="audio-volume-high-symbolic"
+
+for mute in "${matching_mutes[@]}"; do
+  if [[ "$mute" != "yes" ]]; then
+    target_mute=1
+    message="$active_name muted"
+    icon="audio-volume-muted-symbolic"
+    break
+  fi
+done
+
+for input_id in "${matching_ids[@]}"; do
+  pactl set-sink-input-mute "$input_id" "$target_mute"
+done
+
+notify "$message" "$icon"
