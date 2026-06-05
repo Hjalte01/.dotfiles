@@ -377,16 +377,6 @@ in {
       executable = true;
     };
 
-    ".local/bin/open-with-fuzzy" = {
-      source = makeLink "scripts/open-with-fuzzy" ../scripts/open-with-fuzzy;
-      executable = true;
-    };
-
-    ".local/share/nautilus/scripts/Open with fuzzy search" = {
-      source = makeLink "scripts/open-with-fuzzy" ../scripts/open-with-fuzzy;
-      executable = true;
-    };
-
     ".local/bin/notification-popups" = {
       source = makeLink "scripts/notification-popups" ../scripts/notification-popups;
       executable = true;
@@ -409,6 +399,11 @@ in {
 
     ".local/bin/extract-archive" = {
       source = makeLink "scripts/extract-archive" ../scripts/extract-archive;
+      executable = true;
+    };
+
+    ".local/bin/screenshot-focused-output" = {
+      source = makeLink "scripts/screenshot-focused-output" ../scripts/screenshot-focused-output;
       executable = true;
     };
 
@@ -506,68 +501,6 @@ in {
     Install.WantedBy = ["graphical-session.target"];
   };
 
-  xdg.mimeApps = {
-    enable = true;
-    associations.added = {
-      "application/x-executable" = ["steam-run.desktop"];
-      "application/x-sharedlib" = ["steam-run.desktop"];
-      "application/x-shellscript" = ["steam-run.desktop" "open-with-fuzzy.desktop"];
-      "text/x-shellscript" = ["steam-run.desktop" "open-with-fuzzy.desktop"];
-      "application/gzip" = ["extract-archive.desktop"];
-      "application/vnd.rar" = ["extract-archive.desktop"];
-      "application/x-7z-compressed" = ["extract-archive.desktop"];
-      "application/x-bzip" = ["extract-archive.desktop"];
-      "application/x-bzip-compressed-tar" = ["extract-archive.desktop"];
-      "application/x-compressed-tar" = ["extract-archive.desktop"];
-      "application/x-gtar" = ["extract-archive.desktop"];
-      "application/x-rar" = ["extract-archive.desktop"];
-      "application/x-tar" = ["extract-archive.desktop"];
-      "application/x-xz" = ["extract-archive.desktop"];
-      "application/x-xz-compressed-tar" = ["extract-archive.desktop"];
-      "application/zip" = ["extract-archive.desktop"];
-      "application/pdf" = ["open-with-fuzzy.desktop"];
-      "image/gif" = ["open-with-fuzzy.desktop"];
-      "image/jpeg" = ["open-with-fuzzy.desktop"];
-      "image/png" = ["open-with-fuzzy.desktop"];
-      "image/webp" = ["open-with-fuzzy.desktop"];
-      "text/plain" = ["open-with-fuzzy.desktop"];
-      "text/markdown" = ["open-with-fuzzy.desktop"];
-      "video/mp4" = ["open-with-fuzzy.desktop"];
-      "video/webm" = ["open-with-fuzzy.desktop"];
-      "video/x-matroska" = ["open-with-fuzzy.desktop"];
-    };
-    defaultApplications = {
-      "image/png" = ["open-with-last.desktop"];
-      "image/jpeg" = ["open-with-last.desktop"];
-      "image/gif" = ["open-with-last.desktop"];
-      "image/webp" = ["open-with-last.desktop"];
-      "video/mp4" = ["open-with-last.desktop"];
-      "video/webm" = ["open-with-last.desktop"];
-      "video/x-matroska" = ["open-with-last.desktop"];
-      "text/plain" = ["open-with-last.desktop"];
-      "text/markdown" = ["open-with-last.desktop"];
-      "text/html" = ["firefox.desktop"];
-      "application/xhtml+xml" = ["firefox.desktop"];
-      "x-scheme-handler/about" = ["firefox.desktop"];
-      "x-scheme-handler/http" = ["firefox.desktop"];
-      "x-scheme-handler/https" = ["firefox.desktop"];
-      "x-scheme-handler/unknown" = ["firefox.desktop"];
-      "application/pdf" = ["open-with-last.desktop"];
-      "application/gzip" = ["extract-archive.desktop"];
-      "application/vnd.rar" = ["extract-archive.desktop"];
-      "application/x-7z-compressed" = ["extract-archive.desktop"];
-      "application/x-bzip" = ["extract-archive.desktop"];
-      "application/x-bzip-compressed-tar" = ["extract-archive.desktop"];
-      "application/x-compressed-tar" = ["extract-archive.desktop"];
-      "application/x-gtar" = ["extract-archive.desktop"];
-      "application/x-rar" = ["extract-archive.desktop"];
-      "application/x-tar" = ["extract-archive.desktop"];
-      "application/x-xz" = ["extract-archive.desktop"];
-      "application/x-xz-compressed-tar" = ["extract-archive.desktop"];
-      "application/zip" = ["extract-archive.desktop"];
-    };
-  };
-
   xdg.desktopEntries."steam-run" = {
     name = "Steam Run";
     genericName = "Compatibility Runtime";
@@ -606,53 +539,6 @@ in {
       "application/x-xz"
       "application/x-xz-compressed-tar"
       "application/zip"
-    ];
-    categories = ["Utility"];
-  };
-
-  xdg.desktopEntries."open-with-fuzzy" = {
-    name = "Open With Fuzzy Search";
-    genericName = "Application Picker";
-    comment = "Choose an application with fuzzy search and open the selected file";
-    exec = "${config.home.homeDirectory}/.local/bin/open-with-fuzzy --choose %f";
-    icon = "system-search";
-    terminal = false;
-    noDisplay = true;
-    mimeType = [
-      "application/pdf"
-      "image/gif"
-      "image/jpeg"
-      "image/png"
-      "image/webp"
-      "text/markdown"
-      "text/plain"
-      "text/x-shellscript"
-      "video/mp4"
-      "video/webm"
-      "video/x-matroska"
-    ];
-    categories = ["Utility"];
-  };
-
-  xdg.desktopEntries."open-with-last" = {
-    name = "Open With Last Used App";
-    genericName = "Application Dispatcher";
-    comment = "Open the selected file with the last app chosen for this file type";
-    exec = "${config.home.homeDirectory}/.local/bin/open-with-fuzzy --last %f";
-    icon = "system-search";
-    terminal = false;
-    noDisplay = true;
-    mimeType = [
-      "application/pdf"
-      "image/gif"
-      "image/jpeg"
-      "image/png"
-      "image/webp"
-      "text/markdown"
-      "text/plain"
-      "video/mp4"
-      "video/webm"
-      "video/x-matroska"
     ];
     categories = ["Utility"];
   };

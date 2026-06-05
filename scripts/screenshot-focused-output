@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+screenshot_dir="${HOME}/Pictures/Screenshots"
+filepath="${screenshot_dir}/$(date +'%Y-%m-%d_%H-%M-%S').png"
+
+mkdir -p "$screenshot_dir"
+
+focused_output="$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n 1)"
+
+if [[ -z "$focused_output" || "$focused_output" == "null" ]]; then
+  notify-send "Screenshot failed" "Could not find the focused monitor"
+  exit 1
+fi
+
+grim -o "$focused_output" "$filepath"
+wl-copy < "$filepath"
+notify-send "Screenshot saved" "$filepath"
