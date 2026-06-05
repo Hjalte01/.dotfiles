@@ -88,6 +88,7 @@
   programs.hyprland.xwayland.enable = true;
   programs.xwayland.enable = true;
   programs.wayvnc.enable = true;
+  programs.dconf.enable = true;
 
   systemd.services.ydotoold = {
     description = "ydotool input daemon";

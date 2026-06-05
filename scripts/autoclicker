@@ -6,6 +6,7 @@ persist_dir="${XDG_STATE_HOME:-$HOME/.local/state}/autoclicker"
 state_dir="$runtime_dir/autoclicker"
 armed_file="$state_dir/z-armed"
 pid_file="$state_dir/clicker.pid"
+held_file="$state_dir/left-held"
 speed_file="$persist_dir/clicks-per-second"
 socket_path="/run/ydotoold/socket"
 script_path="$HOME/.local/bin/autoclicker"
@@ -39,6 +40,18 @@ click_delay() {
   awk -v speed="$(read_speed)" 'BEGIN { printf "%.6f\n", 1 / speed }'
 }
 
+require_ydotool() {
+  if ! command -v ydotool >/dev/null 2>&1; then
+    notify "ydotool is not installed. Rebuild Home Manager first."
+    exit 1
+  fi
+
+  if [[ ! -S "$socket_path" ]]; then
+    notify "ydotoold is not running. Rebuild NixOS and restart first."
+    exit 1
+  fi
+}
+
 is_clicking() {
   [[ -f "$pid_file" ]] || return 1
   local pid
@@ -57,15 +70,7 @@ stop_clicking() {
 }
 
 start_clicking() {
-  if ! command -v ydotool >/dev/null 2>&1; then
-    notify "ydotool is not installed. Rebuild Home Manager first."
-    exit 1
-  fi
-
-  if [[ ! -S "$socket_path" ]]; then
-    notify "ydotoold is not running. Rebuild NixOS and restart first."
-    exit 1
-  fi
+  require_ydotool
 
   (
     export YDOTOOL_SOCKET="$socket_path"
@@ -79,6 +84,32 @@ start_clicking() {
   printf '%s\n' "$!" > "$pid_file"
 }
 
+release_left() {
+  hyprctl dispatch sendkeystate ", mouse:272, up, activewindow" >/dev/null 2>&1 || true
+  rm -f "$held_file"
+}
+
+start_left_hold() {
+  stop_clicking
+  hyprctl dispatch sendkeystate ", mouse:272, down, activewindow" >/dev/null
+  : > "$held_file"
+}
+
+enable_left_hold() {
+  start_left_hold
+  notify "left click hold on"
+}
+
+toggle_left_hold() {
+  if [[ -f "$held_file" ]]; then
+    release_left
+    notify "left click hold off"
+    return
+  fi
+
+  enable_left_hold
+}
+
 arm_z() {
   if [[ -x "$HOME/.local/bin/autoscroll" ]]; then
     "$HOME/.local/bin/autoscroll" off >/dev/null 2>&1 || true
@@ -89,6 +120,7 @@ arm_z() {
   fi
 
   hyprctl keyword bind ", z, exec, $script_path click-toggle" >/dev/null
+  hyprctl keyword bind ", less, exec, $script_path hold-on" >/dev/null
   hyprctl keyword bind ", plus, exec, $script_path speed-up 1" >/dev/null
   hyprctl keyword bind "CTRL, plus, exec, $script_path speed-up 10" >/dev/null
   hyprctl keyword bind "SHIFT, plus, exec, $script_path speed-up 100" >/dev/null
@@ -96,7 +128,7 @@ arm_z() {
   hyprctl keyword bind "CTRL, minus, exec, $script_path speed-down 10" >/dev/null
   hyprctl keyword bind "SHIFT, minus, exec, $script_path speed-down 100" >/dev/null
   : > "$armed_file"
-  notify "z toggles clicking, +/- changes speed ($(read_speed)/s)"
+  notify "z toggles clicking, < holds left click, +/- changes speed ($(read_speed)/s)"
 }
 
 disarm_z() {
@@ -107,7 +139,9 @@ disarm_z() {
   fi
 
   stop_clicking
+  release_left
   hyprctl keyword unbind ", z" >/dev/null || true
+  hyprctl keyword unbind ", less" >/dev/null || true
   hyprctl keyword unbind ", plus" >/dev/null || true
   hyprctl keyword unbind "CTRL, plus" >/dev/null || true
   hyprctl keyword unbind "SHIFT, plus" >/dev/null || true
@@ -179,6 +213,12 @@ case "${1:-}" in
       notify "clicking started"
     fi
     ;;
+  hold-on)
+    enable_left_hold
+    ;;
+  hold-toggle)
+    toggle_left_hold
+    ;;
   off)
     disarm_z active
     ;;
@@ -189,7 +229,7 @@ case "${1:-}" in
     speed_down "${2:-1}"
     ;;
   *)
-    printf 'Usage: %s {arm-toggle|click-toggle|off|speed-up AMOUNT|speed-down AMOUNT}\n' "${0##*/}" >&2
+    printf 'Usage: %s {arm-toggle|click-toggle|hold-on|hold-toggle|off|speed-up AMOUNT|speed-down AMOUNT}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

@@ -50,8 +50,9 @@ end, { desc = "Grep in Dotfiles config" })
 ----------------------------------------
 -- Smart <Tab>: Copilot if visible, else completion, else insert tab
 vim.keymap.set("i", "<Tab>", function()
+  local copilot_enabled = not require("utils.project").is_codeforces_buffer(0)
   local ok, s = pcall(require, "copilot.suggestion")
-  if ok and s.is_visible() then
+  if copilot_enabled and ok and s.is_visible() then
     s.accept()
     return ""
   end

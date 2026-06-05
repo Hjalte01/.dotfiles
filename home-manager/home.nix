@@ -171,6 +171,8 @@ in {
     ./common.nix
   ];
 
+  services.easyeffects.enable = true;
+
   # Packages you want installed just for your user
   home.packages = with pkgs; [
     stdenv.cc.cc.lib # Runtime libstdc++ for Python ML wheels
@@ -241,6 +243,7 @@ in {
     glibc.dev # The core C standard library headers (<stdio.h>, <stdlib.h>)
 
     clang-tools
+    online-judge-tools
   ];
 
   # ==========================================
@@ -330,6 +333,11 @@ in {
 
     ".local/bin/math-ocr" = {
       source = makeLink "scripts/math-ocr" ../scripts/math-ocr;
+      executable = true;
+    };
+
+    ".local/bin/easyeffects-start-bypassed" = {
+      source = makeLink "scripts/easyeffects-start-bypassed" ../scripts/easyeffects-start-bypassed;
       executable = true;
     };
 

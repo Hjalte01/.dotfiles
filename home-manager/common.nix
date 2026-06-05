@@ -63,6 +63,7 @@ in {
       - Shared configuration should live as high as practical in the shared/general profile, especially in `home-manager/common.nix`, so both the main PC and mobile VPS can reuse it.
       - Host-specific changes should stay in the relevant PC or mobile VPS modules.
       - Manual fixes are acceptable only when a declarative solution is not practical yet; when possible, leave the work in a state that can be made reproducible later.
+      - After changing NixOS, Home Manager, Neovim, shell, Hyprland, or other dotfiles that are activated through the flake, run `nxb` before finishing so the live system matches the repository. If the user explicitly says not to run `nxb` or gives a conflicting instruction, follow the user's latest explicit instruction instead.
 
       ## Shared Context Locations
 
