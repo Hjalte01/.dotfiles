@@ -398,6 +398,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/codeforces-session" = {
+      source = makeLink "scripts/codeforces-session" ../scripts/codeforces-session;
+      executable = true;
+    };
+
     ".local/bin/notification-history" = {
       source = makeLink "scripts/notification-history" ../scripts/notification-history;
       executable = true;
