@@ -8,6 +8,12 @@
 local opts = { noremap = true, silent = true }
 
 ----------------------------------------
+--- Macro recording
+----------------------------------------
+vim.keymap.set("n", "Q", "q", { desc = "Record macro" })
+vim.keymap.set("n", "q", "<Nop>", { desc = "Disable accidental macro recording" })
+
+----------------------------------------
 --- Helper functions
 ----------------------------------------
 local function is_mapped(mode, lhs)
@@ -44,6 +50,32 @@ vim.keymap.set("n", "<leader>f:", function()
     hidden = true,
   })
 end, { desc = "Grep in Dotfiles config" })
+
+----------------------------------------
+--- LSP helpers
+----------------------------------------
+vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "Rename Symbol" })
+
+local function toggle_inlay_hints()
+  if not vim.lsp.inlay_hint then
+    vim.notify("Inlay hints are not supported by this Neovim version.", vim.log.levels.WARN)
+    return
+  end
+
+  local enabled = vim.lsp.inlay_hint.is_enabled({ bufnr = 0 })
+  vim.lsp.inlay_hint.enable(not enabled, { bufnr = 0 })
+  vim.notify((enabled and "Disabled" or "Enabled") .. " inlay hints")
+end
+
+vim.api.nvim_create_user_command("LspRename", function()
+  vim.lsp.buf.rename()
+end, { desc = "Rename symbol under cursor" })
+
+vim.api.nvim_create_user_command("ToggleInlayHints", toggle_inlay_hints, {
+  desc = "Toggle LSP inlay hints in the current buffer",
+})
+
+vim.keymap.set("n", "<leader>uh", toggle_inlay_hints, { desc = "Toggle Inlay Hints" })
 
 ----------------------------------------
 --- Copilot and completion integration

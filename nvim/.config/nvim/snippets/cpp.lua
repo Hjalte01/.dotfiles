@@ -36,4 +36,32 @@ int main() {{
       }
     )
   ),
+  s(
+    "strcnt",
+    fmt(
+      [[
+vector<int> cnt(26);
+for (char c : {}) {{
+  cnt[c - 'a']++;
+}}
+]],
+      {
+        i(1, "s"),
+      }
+    )
+  ),
+  s(
+    "strmap",
+    fmt(
+      [[
+map<string, int> cnt;
+for (string s : {}) {{
+  cnt[s]++;
+}}
+]],
+      {
+        i(1, "words"),
+      }
+    )
+  ),
 }

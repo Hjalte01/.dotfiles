@@ -26,6 +26,16 @@ vim.api.nvim_create_autocmd("BufWritePost", {
 vim.keymap.set(
   "n",
   "<leader>cd",
-  Competitive.archive_current_problem,
+  function()
+    require("utils.competitive").archive_current_problem()
+  end,
   { buffer = true, desc = "Archive Problem as Done" }
+)
+vim.keymap.set(
+  "n",
+  "<leader>cD",
+  function()
+    require("utils.competitive").archive_all_problems()
+  end,
+  { buffer = true, desc = "Archive All Problems as Done" }
 )

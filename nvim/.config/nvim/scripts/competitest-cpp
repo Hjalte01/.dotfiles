@@ -1,0 +1,22 @@
+set -euo pipefail
+
+mode="${1:?mode is required}"
+src="${2:?source path is required}"
+name="${3:?file stem is required}"
+
+hash="$(printf "%s" "$src" | sha256sum | cut -d " " -f 1)"
+out="/tmp/competitest.nvim/${hash}-${name}"
+
+case "$mode" in
+  compile)
+    mkdir -p "$(dirname "$out")"
+    exec g++ -std=c++23 -Wall -Wextra -O2 "$src" -o "$out"
+    ;;
+  run)
+    exec "$out"
+    ;;
+  *)
+    echo "unknown competitest-cpp mode: $mode" >&2
+    exit 2
+    ;;
+esac

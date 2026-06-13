@@ -403,6 +403,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/codeforces-auto-pull" = {
+      source = makeLink "scripts/codeforces-auto-pull" ../scripts/codeforces-auto-pull;
+      executable = true;
+    };
+
     ".local/bin/notification-history" = {
       source = makeLink "scripts/notification-history" ../scripts/notification-history;
       executable = true;
@@ -478,6 +483,22 @@ in {
     };
 
     Install.WantedBy = ["graphical-session.target"];
+  };
+
+  systemd.user.services.codeforces-auto-pull = {
+    Unit = {
+      Description = "Automatically pull Codeforces samples from Firefox history";
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+
+    Service = {
+      ExecStart = "${pkgs.python313}/bin/python3 %h/.local/bin/codeforces-auto-pull";
+      Restart = "always";
+      RestartSec = 5;
+    };
+
+    Install.WantedBy = ["graphical-session.target" "default.target"];
   };
 
   systemd.user.services.cliphist-text = {

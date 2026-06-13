@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+import argparse
+import html
+import json
+import os
+import re
+import shutil
+import sqlite3
+import sys
+import tempfile
+import time
+import urllib.request
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import urlparse
+
+
+PROJECT_ROOT = Path.home() / "Documents/side_projects/codeforces"
+FIREFOX_PROFILE = Path.home() / ".mozilla/firefox/idle-games"
+STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "codeforces-auto-pull"
+STATE_FILE = STATE_DIR / "seen.json"
+
+
+PROBLEM_PATTERNS = (
+    re.compile(r"^/problemset/problem/(\d+)/([A-Za-z0-9]+)$"),
+    re.compile(r"^/contest/(\d+)/problem/([A-Za-z0-9]+)$"),
+    re.compile(r"^/gym/(\d+)/problem/([A-Za-z0-9]+)$"),
+)
+
+
+def problem_key(url):
+    parsed = urlparse(url)
+    if parsed.netloc.lower() not in {"codeforces.com", "www.codeforces.com"}:
+        return None
+
+    for pattern in PROBLEM_PATTERNS:
+        match = pattern.match(parsed.path.rstrip("/"))
+        if match:
+            return f"{match.group(1)}_{match.group(2)}"
+
+    return None
+
+
+def snake_case(value):
+    value = re.sub(r"^[A-Z0-9]+\.\s*", "", value)
+    value = re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower()
+    return value or "problem"
+
+
+def task_class(name, fallback):
+    prefix = re.match(r"^([A-Z0-9]+)\.\s*", name)
+    words = re.sub(r"^[A-Z0-9]+\.\s*", "", name)
+    words = re.sub(r"[^A-Za-z0-9]+", " ", words).strip().split()
+    suffix = "".join(word[:1].upper() + word[1:] for word in words) or "Problem"
+    out = f"{prefix.group(1) if prefix else fallback}{suffix}"
+    return re.sub(r"^[0-9]", r"Task\g<0>", out)
+
+
+class CodeforcesParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.title = ""
+        self.time_limit = 0
+        self.memory_limit = 0
+        self.tests = []
+        self._classes = []
+        self._capture = None
+        self._buffer = []
+        self._current_test = {}
+        self._pre_depth = 0
+        self._capture_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "br" and self._capture in {"input", "output"}:
+            self._buffer.append("\n")
+            return
+
+        classes = set(dict(attrs).get("class", "").split())
+        self._classes.append(classes)
+
+        if self._capture in {"title", "time", "memory"}:
+            self._capture_depth += 1
+        elif "title" in classes and self._inside("header"):
+            self._capture = "title"
+            self._buffer = []
+            self._capture_depth = 1
+        elif "time-limit" in classes and self._inside("header"):
+            self._capture = "time"
+            self._buffer = []
+            self._capture_depth = 1
+        elif "memory-limit" in classes and self._inside("header"):
+            self._capture = "memory"
+            self._buffer = []
+            self._capture_depth = 1
+        elif tag == "pre" and self._inside("input"):
+            self._capture = "input"
+            self._buffer = []
+            self._pre_depth = 1
+        elif tag == "pre" and self._inside("output"):
+            self._capture = "output"
+            self._buffer = []
+            self._pre_depth = 1
+        elif tag == "div" and self._capture in {"input", "output"} and self._buffer:
+            self._buffer.append("\n")
+
+    def handle_startendtag(self, tag, attrs):
+        if tag == "br" and self._capture in {"input", "output"}:
+            self._buffer.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag == "pre" and self._capture in {"input", "output"}:
+            value = html.unescape("".join(self._buffer)).replace("\r\n", "\n").replace("\r", "\n").rstrip() + "\n"
+            self._current_test[self._capture] = value
+            if self._capture == "output":
+                self.tests.append(
+                    {
+                        "input": self._current_test.get("input", ""),
+                        "output": self._current_test.get("output", ""),
+                    }
+                )
+                self._current_test = {}
+            self._capture = None
+            self._buffer = []
+            self._pre_depth = 0
+        elif tag == "div" and self._capture in {"title", "time", "memory"}:
+            self._capture_depth -= 1
+            if self._capture_depth <= 0:
+                value = html.unescape("".join(self._buffer)).strip()
+                if self._capture == "title":
+                    self.title = value
+                elif self._capture == "time":
+                    self.time_limit = parse_time(value)
+                elif self._capture == "memory":
+                    self.memory_limit = parse_memory(value)
+                self._capture = None
+                self._buffer = []
+                self._capture_depth = 0
+
+        if self._classes:
+            self._classes.pop()
+
+    def handle_data(self, data):
+        if self._capture:
+            self._buffer.append(data)
+
+    def handle_entityref(self, name):
+        if self._capture:
+            self._buffer.append(f"&{name};")
+
+    def handle_charref(self, name):
+        if self._capture:
+            self._buffer.append(f"&#{name};")
+
+    def _inside(self, class_name):
+        return any(class_name in classes for classes in self._classes)
+
+
+def parse_time(value):
+    match = re.search(r"([\d.]+)", value)
+    if not match:
+        return 0
+    number = float(match.group(1))
+    return round(number if "ms" in value.lower() else number * 1000)
+
+
+def parse_memory(value):
+    match = re.search(r"([\d.]+)", value)
+    if not match:
+        return 0
+    number = float(match.group(1))
+    return round(number * 1024 if "gb" in value.lower() else number)
+
+
+def latest_problem_urls(limit):
+    db = FIREFOX_PROFILE / "places.sqlite"
+    if not db.exists():
+        return []
+
+    with tempfile.TemporaryDirectory(prefix="codeforces-auto-pull-") as tmp:
+        snapshot = Path(tmp) / "places.sqlite"
+        shutil.copy2(db, snapshot)
+        for suffix in ("-wal", "-shm"):
+            sidecar = Path(f"{db}{suffix}")
+            if sidecar.exists():
+                shutil.copy2(sidecar, Path(f"{snapshot}{suffix}"))
+
+        conn = sqlite3.connect(f"file:{snapshot}?mode=ro", uri=True)
+        try:
+            rows = conn.execute(
+                """
+                select p.url, v.visit_date
+                from moz_places p
+                join moz_historyvisits v on v.place_id = p.id
+                where p.url like 'https://codeforces.com/%'
+                order by v.visit_date desc
+                limit ?
+                """,
+                (limit * 8,),
+            ).fetchall()
+        finally:
+            conn.close()
+
+    out = []
+    seen = set()
+    for url, visit_date in rows:
+        key = problem_key(url)
+        if key and key not in seen:
+            seen.add(key)
+            out.append((url, (visit_date or 0) / 1000000))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def load_seen():
+    if not STATE_FILE.exists():
+        return {}
+    try:
+        data = json.loads(STATE_FILE.read_text())
+        if "entries" in data:
+            return data["entries"]
+        return {url: None for url in data.get("urls", [])}
+    except Exception:
+        return {}
+
+
+def save_seen(seen):
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps({"entries": seen}, indent=2, sort_keys=True) + "\n")
+
+
+def seen_ast_exists(seen, url):
+    path = seen.get(url)
+    return path and Path(path).exists()
+
+
+def update_seen_ast_mtime(seen, url, mtime):
+    path = seen.get(url)
+    if not path:
+        return False
+
+    target = Path(path)
+    if not target.exists():
+        return False
+
+    try:
+        os.utime(target, (mtime, mtime))
+        return True
+    except OSError as error:
+        print(f"codeforces-auto-pull: could not update timestamp for {target}: {error}", file=sys.stderr, flush=True)
+        return False
+
+
+def fetch_task(url):
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 codeforces-auto-pull",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
+        body = response.read().decode(response.headers.get_content_charset() or "utf-8", errors="replace")
+
+    parser = CodeforcesParser()
+    parser.feed(body)
+
+    key = problem_key(url)
+    if not key or not parser.title or not parser.tests:
+        raise RuntimeError(f"could not parse Codeforces problem from {url}")
+
+    fallback = key.split("_", 1)[1]
+    return {
+        "name": parser.title,
+        "group": f"Codeforces - {key.split('_', 1)[0]}",
+        "url": url,
+        "interactive": "interactive" in body.lower(),
+        "memoryLimit": parser.memory_limit,
+        "timeLimit": parser.time_limit,
+        "tests": parser.tests,
+        "testType": "single",
+        "input": {"type": "stdin"},
+        "output": {"type": "stdout"},
+        "languages": {
+            "java": {
+                "mainClass": "Main",
+                "taskClass": task_class(parser.title, fallback),
+            }
+        },
+        "batch": {
+            "id": f"codeforces-auto-pull-{key}",
+            "size": 1,
+        },
+    }
+
+
+def write_task(task, mtime=None):
+    ast_dir = PROJECT_ROOT / ".ast"
+    ast_dir.mkdir(parents=True, exist_ok=True)
+    key = problem_key(task["url"]) or snake_case(task["name"])
+    target = ast_dir / f"{key}_{snake_case(task['name'])}.json"
+    target.write_text(json.dumps(task, indent=2, ensure_ascii=False) + "\n")
+    if mtime is not None:
+        os.utime(target, (mtime, mtime))
+    print(f"wrote {target}", flush=True)
+    return target
+
+
+def poll_once(seen, limit):
+    changed = False
+    for url, visit_time in reversed(latest_problem_urls(limit)):
+        if seen_ast_exists(seen, url):
+            update_seen_ast_mtime(seen, url, visit_time)
+            continue
+        try:
+            target = write_task(fetch_task(url), visit_time)
+            seen[url] = str(target)
+            changed = True
+        except Exception as error:
+            print(f"codeforces-auto-pull: {error}", file=sys.stderr, flush=True)
+    if changed:
+        save_seen(seen)
+    return changed
+
+
+def pull_url(seen, url):
+    key = problem_key(url)
+    if not key:
+        raise RuntimeError(f"not a supported Codeforces problem URL: {url}")
+
+    if seen_ast_exists(seen, url):
+        print(f"already exists {seen[url]}", flush=True)
+        return False
+
+    target = write_task(fetch_task(url))
+    seen[url] = str(target)
+    save_seen(seen)
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--interval", type=float, default=3.0)
+    parser.add_argument("--limit", type=int, default=8)
+    parser.add_argument("--url", action="append", default=[])
+    args = parser.parse_args()
+
+    seen = load_seen()
+    if args.url:
+        for url in args.url:
+            pull_url(seen, url)
+        return
+
+    poll_once(seen, args.limit)
+    if args.once:
+        return
+
+    while True:
+        time.sleep(args.interval)
+        poll_once(seen, args.limit)
+
+
+if __name__ == "__main__":
+    main()

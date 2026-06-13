@@ -17,6 +17,17 @@ return {
       end,
       desc = "[C++] keyword search",
     },
+    {
+      "<localleader>cs",
+      function()
+        require("snacks").picker.grep({
+          title = "C++ Cookbook",
+          cwd = vim.fn.stdpath("config") .. "/docs/cpp",
+          hidden = true,
+        })
+      end,
+      desc = "[C++] cookbook search",
+    },
   },
   dependencies = {
     "folke/snacks.nvim",

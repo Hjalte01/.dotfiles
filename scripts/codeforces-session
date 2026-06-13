@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-firefox "https://codeforces.com/problemset?order=BY_RATING_ASC" >/dev/null 2>&1 &
+firefox \
+  "https://codeforces.com/problemset?order=BY_RATING_ASC" \
+  "https://www.google.com/search?q=timer" \
+  >/dev/null 2>&1 &
 ghostty -e bash -ic 'cd /home/hjalte/Documents/side_projects/codeforces && nvim .; exec bash -i' >/dev/null 2>&1 &
