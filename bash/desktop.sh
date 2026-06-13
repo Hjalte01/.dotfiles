@@ -14,6 +14,9 @@ alias nvimconf="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/plugins/code-companio
 alias nvimkeyb="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/config/keymaps.lua"
 
 alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"
+alias touchdraw="touchscreen-toggle temp"
+alias touchon="touchscreen-toggle on"
+alias touchoff="touchscreen-toggle off"
 
 history_pick() {
   local selected

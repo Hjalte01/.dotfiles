@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/touchscreen-toggle"
+state_file="$state_dir/enabled"
+default_temp_duration="30m"
+
+usage() {
+  cat <<'EOF'
+Usage: touchscreen-toggle [on|off|toggle|status|temp [duration]]
+
+Examples:
+  touchscreen-toggle on
+  touchscreen-toggle off
+  touchscreen-toggle
+  touchscreen-toggle temp 20m
+
+Durations use sleep syntax, e.g. 90s, 20m, 1h.
+EOF
+}
+
+notify() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "Touchscreen" "$1" >/dev/null 2>&1 || true
+  fi
+}
+
+set_enabled() {
+  local enabled="$1"
+
+  hyprctl keyword input:touchdevice:enabled "$enabled" >/dev/null
+
+  mkdir -p "$state_dir"
+  if [[ "$enabled" == "true" ]]; then
+    printf 'true\n' >"$state_file"
+    notify "Enabled"
+    printf 'Touchscreen enabled.\n'
+  else
+    printf 'false\n' >"$state_file"
+    notify "Disabled"
+    printf 'Touchscreen disabled.\n'
+  fi
+}
+
+duration_to_seconds() {
+  local duration="$1"
+  local amount unit
+
+  if [[ ! "$duration" =~ ^([0-9]+)([smh]?)$ ]]; then
+    printf 'Invalid duration: %s\n' "$duration" >&2
+    printf 'Use a number with optional s, m, or h suffix, e.g. 90s, 20m, 1h.\n' >&2
+    return 2
+  fi
+
+  amount="${BASH_REMATCH[1]}"
+  unit="${BASH_REMATCH[2]:-s}"
+
+  case "$unit" in
+  s) printf '%s\n' "$amount" ;;
+  m) printf '%s\n' "$((amount * 60))" ;;
+  h) printf '%s\n' "$((amount * 3600))" ;;
+  esac
+}
+
+is_enabled() {
+  local enabled
+
+  if enabled="$(hyprctl getoption input:touchdevice:enabled 2>/dev/null | awk '/^int:/ {print $2; exit}')"; then
+    [[ "$enabled" == "1" ]]
+    return
+  fi
+
+  [[ -f "$state_file" ]] && [[ "$(cat "$state_file")" == "true" ]]
+}
+
+status() {
+  if is_enabled; then
+    printf 'Touchscreen enabled.\n'
+  else
+    printf 'Touchscreen disabled.\n'
+  fi
+}
+
+disable_after() {
+  local duration="$1"
+
+  sleep "$duration"
+  "$0" off >/dev/null 2>&1 || true
+}
+
+schedule_disable() {
+  local seconds="$1"
+  local unit="touchscreen-toggle-auto-disable"
+
+  if command -v systemd-run >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user stop "${unit}.timer" "${unit}.service" >/dev/null 2>&1 || true
+    systemd-run --user --collect --unit "$unit" --on-active="${seconds}s" "$0" off >/dev/null
+    return
+  fi
+
+  nohup "$0" _disable_after "$seconds" >/dev/null 2>&1 &
+}
+
+temp_enable() {
+  local duration="${1:-$default_temp_duration}"
+  local seconds
+
+  seconds="$(duration_to_seconds "$duration")"
+
+  set_enabled true
+  schedule_disable "$seconds"
+  printf 'Touchscreen will be disabled after %s.\n' "$duration"
+}
+
+case "${1:-toggle}" in
+on | enable)
+  set_enabled true
+  ;;
+off | disable)
+  set_enabled false
+  ;;
+toggle)
+  if is_enabled; then
+    set_enabled false
+  else
+    set_enabled true
+  fi
+  ;;
+status)
+  status
+  ;;
+temp | temporary)
+  temp_enable "${2:-$default_temp_duration}"
+  ;;
+_disable_after)
+  disable_after "${2:?missing duration}"
+  ;;
+-h | --help | help)
+  usage
+  ;;
+*)
+  usage >&2
+  exit 2
+  ;;
+esac

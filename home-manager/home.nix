@@ -423,6 +423,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/touchscreen-toggle" = {
+      source = makeLink "scripts/touchscreen-toggle" ../scripts/touchscreen-toggle;
+      executable = true;
+    };
+
     ".local/bin/steam-run" = {
       text = ''
         #!/bin/sh

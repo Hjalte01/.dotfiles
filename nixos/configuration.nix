@@ -16,12 +16,7 @@
   # No SUDO password
   security.sudo.wheelNeedsPassword = false;
 
-  # Blacklist touchscreen
-  # boot.blacklistedKernelModules = [ "wacom" "hid_multitouch" ];
-  # Permanently ignore ghost inputs from Wacom touchscreen
   services.udev.extraRules = ''
-    ATTRS{name}=="*Wacom HID 5367*", ENV{LIBINPUT_IGNORE_DEVICE}="1"
-
     # Talon/Tobii eye tracker access. Talon's bundled installer cannot write
     # this rule on NixOS because /etc is declarative.
     SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0127", TAG+="uaccess"
