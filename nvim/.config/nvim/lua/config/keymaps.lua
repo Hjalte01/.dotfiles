@@ -24,6 +24,44 @@ local function is_mapped(mode, lhs)
 end
 
 ----------------------------------------
+--- Debugger controls
+----------------------------------------
+local function dap_action(desc, callback)
+  return {
+    callback = callback,
+    opts = { desc = desc, silent = true },
+  }
+end
+
+local dap_controls = {
+  ["<leader>dc"] = dap_action("Debugger Continue", function()
+    require("dap").continue()
+  end),
+  ["<leader>dO"] = dap_action("Debugger Step Over", function()
+    require("dap").step_over()
+  end),
+  ["<leader>d0"] = dap_action("Debugger Step Over", function()
+    require("dap").step_over()
+  end),
+  ["<leader>di"] = dap_action("Debugger Step Into", function()
+    require("dap").step_into()
+  end),
+  ["<leader>do"] = dap_action("Debugger Step Out", function()
+    require("dap").step_out()
+  end),
+  ["<leader>dt"] = dap_action("Debugger Terminate", function()
+    require("dap").terminate()
+  end),
+  ["<leader>du"] = dap_action("Debugger UI", function()
+    require("dapui").toggle({})
+  end),
+}
+
+for lhs, mapping in pairs(dap_controls) do
+  vim.keymap.set({ "n", "i", "t" }, lhs, mapping.callback, mapping.opts)
+end
+
+----------------------------------------
 --- Grep in Neovim config keymap
 ----------------------------------------
 vim.keymap.set("n", "<leader>fC", function()

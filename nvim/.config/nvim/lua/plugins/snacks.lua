@@ -9,7 +9,7 @@ return {
     -- refer to the configuration section below
     bigfile = { enabled = true },
     dashboard = { enabled = true },
-    explorer = { enabled = true },
+    explorer = { enabled = false },
     indent = { enabled = true },
     input = { enabled = true },
     picker = { enabled = true },
@@ -22,6 +22,18 @@ return {
 
     picker = {
       enabled = true,
+      win = {
+        input = {
+          keys = {
+            ["yy"] = { "yank", mode = "n" },
+          },
+        },
+        list = {
+          keys = {
+            ["yy"] = "yank",
+          },
+        },
+      },
       sources = {
         files = { hidden = true },
         grep = { hidden = true },

@@ -4,6 +4,10 @@ set -euo pipefail
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/touchscreen-toggle"
 state_file="$state_dir/enabled"
 default_temp_duration="30m"
+touchscreen_names=(
+  "Wacom HID 5367 Finger"
+  "Wacom HID 5367 Pen"
+)
 
 usage() {
   cat <<'EOF'
@@ -25,17 +29,63 @@ notify() {
   fi
 }
 
+touchscreen_inhibit_paths() {
+  local name_file
+
+  for name_file in /sys/class/input/event*/device/name; do
+    [[ -r "$name_file" ]] || continue
+
+    case "$(<"$name_file")" in
+    "${touchscreen_names[0]}" | "${touchscreen_names[1]}")
+      printf '%s\n' "${name_file%/name}/inhibited"
+      ;;
+    esac
+  done
+}
+
+set_hardware_inhibited() {
+  local inhibited="$1"
+  local path found=false
+
+  while IFS= read -r path; do
+    found=true
+    printf '%s\n' "$inhibited" | sudo tee "$path" >/dev/null
+  done < <(touchscreen_inhibit_paths)
+
+  if [[ "$found" == "false" ]]; then
+    printf 'Could not find Wacom touchscreen input devices.\n' >&2
+    return 1
+  fi
+}
+
+is_hardware_inhibited() {
+  local path found=false
+
+  while IFS= read -r path; do
+    found=true
+    [[ -r "$path" ]] || continue
+    if [[ "$(<"$path")" == "1" ]]; then
+      return 0
+    fi
+  done < <(touchscreen_inhibit_paths)
+
+  [[ "$found" == "true" ]] && return 1
+  return 1
+}
+
 set_enabled() {
   local enabled="$1"
 
-  hyprctl keyword input:touchdevice:enabled "$enabled" >/dev/null
-
   mkdir -p "$state_dir"
   if [[ "$enabled" == "true" ]]; then
+    set_hardware_inhibited 0
+    hyprctl keyword input:touchdevice:enabled true >/dev/null
     printf 'true\n' >"$state_file"
     notify "Enabled"
     printf 'Touchscreen enabled.\n'
   else
+    hyprctl keyword input:touchdevice:enabled false >/dev/null
+    set_hardware_inhibited 1
     printf 'false\n' >"$state_file"
     notify "Disabled"
     printf 'Touchscreen disabled.\n'
@@ -64,6 +114,10 @@ duration_to_seconds() {
 
 is_enabled() {
   local enabled
+
+  if is_hardware_inhibited; then
+    return 1
+  fi
 
   if enabled="$(hyprctl getoption input:touchdevice:enabled 2>/dev/null | awk '/^int:/ {print $2; exit}')"; then
     [[ "$enabled" == "1" ]]

@@ -111,6 +111,13 @@ return {
         end,
         desc = "Run Testcases",
       },
+      {
+        "<leader>tD",
+        function()
+          require("utils.cpp_debug").debug_current_testcase()
+        end,
+        desc = "Debug Testcase",
+      },
       { "<leader>wt", focus_competitest_ui, desc = "Focus Test UI" },
       { "<leader>ta", "<cmd>CompetiTest add_testcase<cr>", desc = "Add Testcase" },
       { "<leader>te", "<cmd>CompetiTest edit_testcase<cr>", desc = "Edit Testcase" },

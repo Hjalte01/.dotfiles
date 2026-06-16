@@ -35,7 +35,11 @@ local function codeforces_problem_url(text)
   end
 
   url = url:gsub("[%)%],%.;]+$", "")
-  if url:match("/problemset/problem/%d+/[A-Za-z0-9]+/?$") or url:match("/contest/%d+/problem/[A-Za-z0-9]+/?$") or url:match("/gym/%d+/problem/[A-Za-z0-9]+/?$") then
+  if
+    url:match("/problemset/problem/%d+/[A-Za-z0-9]+/?$")
+    or url:match("/contest/%d+/problem/[A-Za-z0-9]+/?$")
+    or url:match("/gym/%d+/problem/[A-Za-z0-9]+/?$")
+  then
     return url
   end
 end
@@ -87,6 +91,57 @@ local function write_template_file(target)
   end
 end
 
+local function problem_url_comment(url)
+  if type(url) ~= "string" or url == "" then
+    return nil
+  end
+
+  return "// " .. url
+end
+
+local function ensure_problem_url_comment(target, url)
+  local comment = problem_url_comment(url)
+  if not comment then
+    return false
+  end
+
+  target = vim.fn.fnamemodify(target, ":p")
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) and vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":p") == target then
+      local lines = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)
+      if lines[1] == comment then
+        return false
+      end
+
+      local was_modified = vim.bo[bufnr].modified
+      if lines[1] and lines[1]:match("^//%s*https?://[^/]*codeforces%.com/") then
+        vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, { comment })
+      else
+        vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, { comment })
+      end
+      if not was_modified then
+        vim.api.nvim_buf_call(bufnr, function()
+          vim.cmd.write()
+        end)
+      end
+      return true
+    end
+  end
+
+  local lines = vim.fn.readfile(target)
+  if lines[1] == comment then
+    return false
+  end
+
+  if lines[1] and lines[1]:match("^//%s*https?://[^/]*codeforces%.com/") then
+    lines[1] = comment
+  else
+    table.insert(lines, 1, comment)
+  end
+  vim.fn.writefile(lines, target)
+  return true
+end
+
 local function write_ast_testcases(root, stem, task)
   if type(task.tests) ~= "table" then
     return
@@ -119,13 +174,16 @@ local function import_ast_problem(json_path, opts)
 
   if is_file(target) then
     if opts.open_existing then
+      ensure_problem_url_comment(target, task.url)
       vim.cmd.edit(vim.fn.fnameescape(target))
       vim.notify(task.name .. " is already imported.")
+      return true
     end
     return false
   end
 
   write_template_file(target)
+  ensure_problem_url_comment(target, task.url)
   write_ast_testcases(root, stem, task)
   vim.cmd.edit(vim.fn.fnameescape(target))
   vim.notify("Imported " .. task.name .. " to " .. target)
@@ -150,12 +208,12 @@ function M.import_latest_ast_problem()
   local root = M.contest_root(vim.fn.getcwd())
 
   for _, json_path in ipairs(ast_candidates(root)) do
-    if import_ast_problem(json_path) then
+    if import_ast_problem(json_path, { open_existing = true }) then
       return
     end
   end
 
-  vim.notify("No new .ast problem to import.", vim.log.levels.INFO)
+  vim.notify("No .ast problem to import.", vim.log.levels.INFO)
 end
 
 function M.pull_and_import_latest_ast_problem()
@@ -172,15 +230,14 @@ function M.pull_and_import_latest_ast_problem()
 
   local url = codeforces_problem_url(clipboard)
   local args = url and { puller, "--url", url } or { puller, "--once", "--limit", "40" }
-  vim.notify(url and ("Pulling Codeforces samples from " .. url) or "Pulling latest Codeforces samples from Firefox history...")
+  vim.notify(
+    url and ("Pulling Codeforces samples from " .. url) or "Pulling latest Codeforces samples from Firefox history..."
+  )
   vim.system(args, { text = true }, function(result)
     vim.schedule(function()
       if result.code ~= 0 then
         local stderr = vim.trim(result.stderr or "")
-        vim.notify(
-          stderr ~= "" and stderr or "Could not pull latest Codeforces samples.",
-          vim.log.levels.WARN
-        )
+        vim.notify(stderr ~= "" and stderr or "Could not pull latest Codeforces samples.", vim.log.levels.WARN)
         return
       end
       M.import_latest_ast_problem()
@@ -356,7 +413,8 @@ function M.archive_all_problems()
   end
 
   local moved_count = vim.tbl_count(moved)
-  local message = string.format("Moved %d C++ problem%s to %s", moved_count, moved_count == 1 and "" or "s", path_join(root, ".done"))
+  local message =
+    string.format("Moved %d C++ problem%s to %s", moved_count, moved_count == 1 and "" or "s", path_join(root, ".done"))
   if #skipped > 0 then
     message = message .. string.format(" (%d skipped)", #skipped)
     vim.notify(table.concat(vim.list_extend({ message }, skipped), "\n"), vim.log.levels.WARN)

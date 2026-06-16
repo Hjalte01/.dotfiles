@@ -27,6 +27,11 @@
     SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0102", TAG+="uaccess"
     SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0313", TAG+="uaccess"
     SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0318", TAG+="uaccess"
+
+    # Keep the flaky Wacom touchscreen/tablet electrically present but inhibited
+    # by default. The user toggle flips these sysfs attributes only while drawing.
+    KERNEL=="input*", SUBSYSTEM=="input", ATTR{name}=="Wacom HID 5367 Finger", ATTR{inhibited}="1"
+    KERNEL=="input*", SUBSYSTEM=="input", ATTR{name}=="Wacom HID 5367 Pen", ATTR{inhibited}="1"
   '';
 
   # Fonts
