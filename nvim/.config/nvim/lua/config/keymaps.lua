@@ -34,6 +34,9 @@ local function dap_action(desc, callback)
 end
 
 local dap_controls = {
+  ["<leader>dm"] = dap_action("Debugger Mode", function()
+    require("utils.debug_mode").enter()
+  end),
   ["<leader>dc"] = dap_action("Debugger Continue", function()
     require("dap").continue()
   end),
