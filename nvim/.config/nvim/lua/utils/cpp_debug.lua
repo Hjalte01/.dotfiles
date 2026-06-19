@@ -59,18 +59,38 @@ local function compile_debug(src, binary, callback)
   end)
 end
 
+local function testcase_number(input_file)
+  return input_file:match("_input(%d+)%.txt$") or "?"
+end
+
 local function start_debug(src, binary, input_file)
   local dap = require("dap")
-  dap.run({
-    type = "codelldb",
-    request = "launch",
-    name = "Debug current testcase",
-    program = binary,
-    cwd = vim.fn.fnamemodify(src, ":h"),
-    stopOnEntry = false,
-    preRunCommands = { "breakpoint set --name main" },
-    stdio = { input_file, nil, nil },
-  })
+
+  local function launch()
+    vim.notify("Debugging testcase " .. testcase_number(input_file))
+    dap.run({
+      type = "codelldb",
+      request = "launch",
+      name = "Debug current testcase",
+      program = binary,
+      cwd = vim.fn.fnamemodify(src, ":h"),
+      stopOnEntry = false,
+      preRunCommands = { "breakpoint set --name main" },
+      stdio = { input_file, vim.NIL, vim.NIL },
+    })
+
+    local ok, debug_mode = pcall(require, "utils.debug_mode")
+    if ok and not debug_mode.is_active() then
+      debug_mode.enter()
+    end
+  end
+
+  if next(dap.sessions()) then
+    dap.terminate({ all = true })
+    vim.defer_fn(launch, 250)
+  else
+    launch()
+  end
 end
 
 function M.debug_current_testcase()
@@ -93,8 +113,7 @@ function M.debug_current_testcase()
   vim.ui.select(inputs, {
     prompt = "Debug testcase",
     format_item = function(path)
-      local tcnum = path:match("_input(%d+)%.txt$") or "?"
-      return "testcase " .. tcnum .. "  " .. vim.fn.fnamemodify(path, ":t")
+      return "testcase " .. testcase_number(path) .. "  " .. vim.fn.fnamemodify(path, ":t")
     end,
   }, function(input_file)
     if not input_file then

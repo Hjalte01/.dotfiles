@@ -7,6 +7,23 @@ local state = {
   help_buf = nil,
 }
 
+local function when_stopped(callback)
+  local dap = require("dap")
+  local session = dap.session()
+
+  if session and session.stopped_thread_id then
+    callback()
+    return
+  end
+
+  for _, candidate in pairs(dap.sessions()) do
+    if candidate.stopped_thread_id then
+      callback()
+      return
+    end
+  end
+end
+
 local controls = {
   {
     key = "c",
@@ -21,7 +38,9 @@ local controls = {
     label = "next",
     desc = "Step over current line",
     action = function()
-      require("dap").step_over()
+      when_stopped(function()
+        require("dap").step_over()
+      end)
     end,
   },
   {
@@ -29,7 +48,9 @@ local controls = {
     label = "into",
     desc = "Step into function",
     action = function()
-      require("dap").step_into()
+      when_stopped(function()
+        require("dap").step_into()
+      end)
     end,
   },
   {
@@ -37,7 +58,9 @@ local controls = {
     label = "out",
     desc = "Step out of function",
     action = function()
-      require("dap").step_out()
+      when_stopped(function()
+        require("dap").step_out()
+      end)
     end,
   },
   {
@@ -165,6 +188,10 @@ function M.exit()
   end
 
   vim.notify("Debug mode off")
+end
+
+function M.is_active()
+  return state.active
 end
 
 function M.enter()
