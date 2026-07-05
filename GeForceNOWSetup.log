@@ -1,0 +1,7 @@
+2026-06-27 16:49:31,843 - INFO - <module> - Version - 1.0.0.12
+2026-06-27 16:49:31,894 - INFO - start - Installation process started
+2026-06-27 16:49:31,895 - INFO - start - Flatpak not found.
+2026-06-27 16:49:33,905 - INFO - execute_cmd - Running - pkexec env sh -c "apt install -y flatpak && flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo"
+2026-06-27 16:49:33,944 - ERROR - execute_cmd - Error:
+Error creating textual authentication agent: Error opening current controlling terminal for the process (`/dev/tty'): No such device or address
+2026-06-27 16:49:33,945 - ERROR - start - Failed to install Flatpak

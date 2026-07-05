@@ -3,6 +3,61 @@
 Use this as a phrase index for things you remember conceptually but not by C++ name.
 Search examples: "string to int", "uppercase", "sort descending", "first greater", "min heap".
 
+## Codeforces Tags Quick Index
+
+Search these exact words when a problem tag gives you the idea but not the C++ pattern.
+
+- bitmasks, bits, xor: masks, subsets, parity, toggles, `a ^ b ^ a = b`.
+- two pointers, 2pointers: sorted pair search, remove duplicates, shrinking windows.
+- sliding window: maintain a valid contiguous range with add/remove operations.
+- prefix sums, suffix sums: fast range sums, counts, xor prefixes.
+- binary search: lower bound, upper bound, binary search answer.
+- greedy: sort by useful order, take earliest/latest/smallest/largest locally safe choice.
+- dynamic programming, dp: states, transitions, base cases, knapsack, subsequences.
+- graphs, dfs, bfs, dsu: components, shortest paths, connectivity, trees.
+- math, number theory: gcd, lcm, modular arithmetic, primes, divisors.
+- implementation, debugging, timing: runtime clock, print containers, edge cases.
+
+## Timing And Runtime Tests
+
+- clock runtime, measure time, test algorithm speed: use `clock()` around the code.
+- `clock()` measures CPU time used by the process, not wall time.
+- Good for local testing only. Remove timing prints before submitting.
+
+```cpp
+clock_t startTime = clock();
+
+// some code here
+
+cout << double(clock() - startTime) / (double)CLOCKS_PER_SEC
+     << " seconds." << endl;
+```
+
+Alternative with chrono:
+
+```cpp
+auto start = chrono::high_resolution_clock::now();
+
+// some code here
+
+auto stop = chrono::high_resolution_clock::now();
+auto ms = chrono::duration_cast<chrono::milliseconds>(stop - start).count();
+cerr << ms << " ms\n";
+```
+
+## Common Contest Tips
+
+- Try tiny edge cases: `n = 0`, `n = 1`, all equal, already sorted, reverse sorted, negative numbers, maximum values.
+- Watch overflow: use `long long` for sums, products, counts of pairs, and `mid = lo + (hi - lo) / 2`.
+- For modulo subtraction: `(a - b + mod) % mod`.
+- For sorted problems, ask whether sorting makes greedy, two pointers, binary search, or prefix sums possible.
+- For "minimum possible maximum" or "maximum possible minimum", think binary search answer.
+- For "subarray", think prefix sums, sliding window, two pointers, or Kadane.
+- For "subsequence", think DP or greedy with positions.
+- For "permutation", think sorting, cycles, inversions, or next permutation.
+- For "tree", remember `n - 1` edges, DFS from any node, parent array, subtree sizes.
+- Estimate complexity before coding: `n <= 2e5` usually wants `O(n log n)` or `O(n)`, not `O(n^2)`.
+
 ## Conversions
 
 - string to int, parse integer: `std::stoi(s)`, `std::stoll(s)` for `long long`, `std::from_chars` for fast no-allocation parsing.
@@ -185,11 +240,97 @@ long long mod_norm(long long x, long long mod) {
 
 - prefix sum: `pref[i + 1] = pref[i] + a[i]`.
 - range sum inclusive l r: `pref[r + 1] - pref[l]`.
+- prefix xor: `px[i + 1] = px[i] ^ a[i]`.
+- range xor inclusive l r: `px[r + 1] ^ px[l]`.
+- prefix counts: `cnt[i + 1][c] = cnt[i][c] + (s[i] == c)`.
 
 ```cpp
 vector<long long> pref(n + 1);
 for (int i = 0; i < n; i++) pref[i + 1] = pref[i] + a[i];
 long long sum = pref[r + 1] - pref[l];
+```
+
+## Two Pointers
+
+- two pointers, 2pointers sorted pair sum: move `l` or `r` based on current sum.
+- two pointers remove duplicates sorted vector: keep write pointer.
+- two pointers longest valid window: move `r` forward, then move `l` while invalid.
+- Works best when moving a pointer only makes the condition change monotonically.
+
+```cpp
+int l = 0, r = n - 1;
+while (l < r) {
+  long long sum = a[l] + a[r];
+  if (sum == target) {
+    // found l, r
+    break;
+  } else if (sum < target) {
+    l++;
+  } else {
+    r--;
+  }
+}
+```
+
+## Sliding Window
+
+- sliding window contiguous range: add right element, remove left element.
+- longest subarray with condition: expand `r`, shrink `l` while invalid.
+- number of valid subarrays ending at r: after fixing window, add `r - l + 1`.
+- Usually for nonnegative arrays, frequencies, distinct count, or constraints that can be repaired by moving `l`.
+
+```cpp
+int l = 0;
+long long sum = 0, ans = 0;
+for (int r = 0; r < n; r++) {
+  sum += a[r];
+  while (sum > limit) {
+    sum -= a[l];
+    l++;
+  }
+  ans = max(ans, (long long)r - l + 1);
+}
+```
+
+## Greedy
+
+- greedy sort intervals by ending time: take earliest finishing interval that fits.
+- greedy minimize cost: often sort by cost, ratio, deadline, or value.
+- exchange argument: prove any optimal answer can swap to your choice without becoming worse.
+- If greedy fails, look for a small counterexample before coding more.
+
+```cpp
+sort(intervals.begin(), intervals.end(), [](auto a, auto b) {
+  return a.second < b.second;
+});
+
+int taken = 0, lastEnd = INT_MIN;
+for (auto [l, r] : intervals) {
+  if (l >= lastEnd) {
+    taken++;
+    lastEnd = r;
+  }
+}
+```
+
+## Dynamic Programming
+
+- dp state: what information must be remembered so the future is independent of the past.
+- dp transition: try all choices from previous smaller states.
+- dp base case: known answer for empty, first, or impossible state.
+- initialize impossible max/min dp: use large `INF` or `-INF`.
+- knapsack 0/1: loop capacity backwards so each item is used once.
+- unbounded knapsack: loop capacity forwards so item can be reused.
+
+```cpp
+const long long INF = 4e18;
+vector<long long> dp(target + 1, INF);
+dp[0] = 0;
+for (int x : coins) {
+  for (int s = x; s <= target; s++) {
+    dp[s] = min(dp[s], dp[s - x] + 1);
+  }
+}
 ```
 
 ## Graphs
@@ -236,11 +377,46 @@ for (int k = 0; k < 4; k++) {
 - toggle bit: `mask ^ (1 << i)`.
 - count bits: `__builtin_popcount(mask)`, `__builtin_popcountll(mask)`.
 - least significant set bit value: `x & -x`.
+
+```cpp
+if ((mask >> i) & 1) {}
+mask |= (1 << i);      // set bit
+mask &= ~(1 << i);     // clear bit
+mask ^= (1 << i);      // toggle bit
+int cnt = __builtin_popcount(mask);
+```
+
 - iterate submasks: `for (int sub = mask; sub; sub = (sub - 1) & mask)`.
 - power of two check: `x > 0 && (x & (x - 1)) == 0`.
 
 ```cpp
 for (int sub = mask; sub; sub = (sub - 1) & mask) {}
+bool isPowerOfTwo = x > 0 && (x & (x - 1)) == 0;
+```
+
+- xor same value cancels: `a ^ a = 0`.
+- xor identity: `a ^ 0 = a`.
+- xor principle: `a ^ b ^ a = b`.
+- xor swap/cancel order does not matter: xor is associative and commutative.
+- find unique when every other number appears twice: xor all numbers.
+
+```cpp
+int result = a ^ b ^ a; // result == b
+
+int x = 0;
+for (int value : a) x ^= value; // leaves the value that appears once
+```
+
+- bitmasks subsets: loop `mask` from `0` to `(1 << n) - 1`.
+
+```cpp
+for (int mask = 0; mask < (1 << n); mask++) {
+  for (int i = 0; i < n; i++) {
+    if ((mask >> i) & 1) {
+      // use item i
+    }
+  }
+}
 ```
 
 ## STL Algorithms

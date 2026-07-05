@@ -1,6 +1,9 @@
 local M = {}
 
 local uv = vim.uv or vim.loop
+local ast_candidates
+local codeforces_submission_matches_problem
+local codeforces_handle = "puzzelor"
 
 local function path_join(...)
   return table.concat(
@@ -44,6 +47,24 @@ local function codeforces_problem_url(text)
   end
 end
 
+local function codeforces_problem_id(url)
+  url = tostring(url or ""):gsub("/$", "")
+  local contest_id, index = url:match("/problemset/problem/(%d+)/([A-Za-z0-9]+)$")
+  if contest_id and index then
+    return tonumber(contest_id), index
+  end
+
+  contest_id, index = url:match("/contest/(%d+)/problem/([A-Za-z0-9]+)$")
+  if contest_id and index then
+    return tonumber(contest_id), index
+  end
+
+  contest_id, index = url:match("/gym/(%d+)/problem/([A-Za-z0-9]+)$")
+  if contest_id and index then
+    return tonumber(contest_id), index
+  end
+end
+
 function M.problem_slug(problem_name)
   local slug = problem_name:lower()
   slug = slug:gsub("^%s*(%a)%s*[%.)%-:]%s*", "%1_")
@@ -55,7 +76,8 @@ end
 function M.contest_root(path)
   path = (path and vim.fn.fnamemodify(path, ":p") or vim.fn.getcwd()):gsub("/$", "")
   local dir = vim.fn.isdirectory(path) == 1 and path or vim.fn.fnamemodify(path, ":h")
-  if vim.fn.fnamemodify(dir, ":t") == "problems" then
+  local dirname = vim.fn.fnamemodify(dir, ":t")
+  if dirname == "problems" or dirname == ".done" or dirname == ".undone" then
     return vim.fn.fnamemodify(dir, ":h")
   end
 
@@ -78,6 +100,104 @@ local function read_json(path)
   if ok and type(data) == "table" then
     return data
   end
+end
+
+local function ast_problem_urls(root)
+  local urls = {}
+  local ast_dir = path_join(root, ".ast")
+  if vim.fn.isdirectory(ast_dir) == 0 then
+    return urls
+  end
+
+  for _, json_path in ipairs(vim.fn.glob(ast_dir .. "/*.json", false, true)) do
+    local task = read_json(json_path)
+    if task and type(task.name) == "string" and type(task.url) == "string" then
+      urls[M.problem_slug(task.name)] = task.url
+    end
+  end
+
+  return urls
+end
+
+local function problem_file_url(source, ast_urls)
+  if source ~= "" and vim.fn.filereadable(source) == 1 then
+    local lines = vim.fn.readfile(source, "", 30)
+    local url = codeforces_problem_url(table.concat(lines, "\n"))
+    if url then
+      return url
+    end
+  end
+
+  local root = M.contest_root(source ~= "" and source or vim.fn.getcwd())
+  local stem = vim.fn.expand("%:t:r")
+  if source ~= "" then
+    stem = vim.fn.fnamemodify(source, ":t:r")
+  end
+  if stem == "" then
+    return nil
+  end
+
+  ast_urls = ast_urls or ast_problem_urls(root)
+  return ast_urls[stem]
+end
+
+local function current_problem_url()
+  return problem_file_url(vim.fn.expand("%:p"))
+end
+
+local function fetch_codeforces_submissions(callback)
+  vim.system({
+    "curl",
+    "-fsSL",
+    "--compressed",
+    "https://codeforces.com/api/user.status?handle=" .. codeforces_handle,
+  }, { text = true }, function(result)
+    vim.schedule(function()
+      if result.code ~= 0 then
+        local stderr = vim.trim(result.stderr or "")
+        callback(nil, stderr ~= "" and stderr or "Could not fetch Codeforces submissions.")
+        return
+      end
+
+      local ok, decoded = pcall(vim.json.decode, result.stdout or "")
+      if not ok or type(decoded) ~= "table" or decoded.status ~= "OK" or type(decoded.result) ~= "table" then
+        local comment = type(decoded) == "table" and decoded.comment or nil
+        callback(nil, comment or "Codeforces returned an unreadable submissions response.")
+        return
+      end
+
+      callback(decoded.result)
+    end)
+  end)
+end
+
+local function problem_submission_status(submissions, contest_id, index)
+  local latest
+  local accepted
+  for _, submission in ipairs(submissions) do
+    if codeforces_submission_matches_problem(submission, contest_id, index) then
+      latest = latest or submission
+      if submission.verdict == "OK" then
+        accepted = submission
+        break
+      end
+    end
+  end
+
+  return accepted, latest
+end
+
+codeforces_submission_matches_problem = function(submission, contest_id, index)
+  local problem = type(submission) == "table" and submission.problem
+  return type(problem) == "table" and problem.contestId == contest_id and problem.index == index
+end
+
+local function describe_submission_time(submission)
+  if type(submission) ~= "table" or type(submission.creationTimeSeconds) ~= "number" then
+    return nil
+  end
+
+  return os.date("%Y-%m-%d %H:%M", submission.creationTimeSeconds)
 end
 
 local function write_template_file(target)
@@ -190,7 +310,7 @@ local function import_ast_problem(json_path, opts)
   return true
 end
 
-local function ast_candidates(root)
+ast_candidates = function(root)
   local ast_dir = path_join(root, ".ast")
   if vim.fn.isdirectory(ast_dir) == 0 then
     vim.notify("No .ast directory found under " .. root, vim.log.levels.WARN)
@@ -280,6 +400,61 @@ function M.choose_ast_problem()
   end)
 end
 
+function M.check_current_codeforces_solved()
+  local source = vim.fn.expand("%:p")
+  if source == "" or vim.bo.filetype ~= "cpp" then
+    vim.notify("Open a C++ Codeforces problem first.", vim.log.levels.WARN)
+    return
+  end
+
+  local url = current_problem_url()
+  if not url then
+    vim.notify("No Codeforces problem URL found in this file or matching .ast data.", vim.log.levels.WARN)
+    return
+  end
+
+  local contest_id, index = codeforces_problem_id(url)
+  if not contest_id or not index then
+    vim.notify("Could not parse Codeforces contest/problem from " .. url, vim.log.levels.WARN)
+    return
+  end
+
+  vim.notify(string.format("Checking Codeforces submissions for %s %s...", contest_id, index))
+  fetch_codeforces_submissions(function(submissions, error)
+    if not submissions then
+      vim.notify(error, vim.log.levels.WARN)
+      return
+    end
+
+    local accepted, latest = problem_submission_status(submissions, contest_id, index)
+    local name = vim.fn.fnamemodify(source, ":t")
+    if accepted then
+      local submitted_at = describe_submission_time(accepted)
+      local suffix = submitted_at and (" at " .. submitted_at) or ""
+      vim.notify(string.format("%s is solved by %s%s.", name, codeforces_handle, suffix), vim.log.levels.INFO)
+    elseif latest then
+      local verdict = latest.verdict or latest.phase or "submitted"
+      local submitted_at = describe_submission_time(latest)
+      local suffix = submitted_at and (" at " .. submitted_at) or ""
+      vim.notify(
+        string.format(
+          "%s is not solved by %s. Latest matching verdict: %s%s.",
+          name,
+          codeforces_handle,
+          verdict,
+          suffix
+        ),
+        vim.log.levels.WARN
+      )
+    else
+      vim.notify(
+        string.format("%s has no matching submissions for %s on Codeforces.", name, codeforces_handle),
+        vim.log.levels.WARN
+      )
+    end
+  end)
+end
+
 function M.ensure_problem_file_location(path)
   path = vim.fn.fnamemodify(path, ":p")
   if vim.fn.filereadable(path) == 0 then
@@ -288,7 +463,8 @@ function M.ensure_problem_file_location(path)
 
   local dir = vim.fn.fnamemodify(path, ":h")
   local name = vim.fn.fnamemodify(path, ":t")
-  if vim.fn.fnamemodify(dir, ":t") == "problems" or vim.fn.fnamemodify(dir, ":t") == ".done" then
+  local dirname = vim.fn.fnamemodify(dir, ":t")
+  if dirname == "problems" or dirname == ".done" or dirname == ".undone" then
     return
   end
 
@@ -343,6 +519,37 @@ local function archive_problem_file(source)
   return true, target
 end
 
+local function move_problem_file_to_dir(source, dirname)
+  local root = M.contest_root(source)
+  local target_dir = path_join(root, dirname)
+  local target = path_join(target_dir, vim.fn.fnamemodify(source, ":t"))
+  local stem = vim.fn.fnamemodify(source, ":t:r")
+
+  mkdir_p(target_dir)
+
+  if is_file(target) then
+    return false, target .. " already exists."
+  end
+
+  local ok, err = uv.fs_rename(source, target)
+  if not ok then
+    return false, "Could not move problem to " .. dirname .. ": " .. tostring(err)
+  end
+
+  remove_file(path_join(vim.fn.fnamemodify(source, ":p:h"), stem))
+  remove_file(path_join(root, stem))
+
+  return true, target
+end
+
+local function mark_problem_file_undone(source)
+  return move_problem_file_to_dir(source, ".undone")
+end
+
+local function restore_problem_file_from_undone(source)
+  return move_problem_file_to_dir(source, "problems")
+end
+
 local function write_loaded_buffer_for_path(path)
   path = vim.fn.fnamemodify(path, ":p")
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -355,6 +562,99 @@ local function write_loaded_buffer_for_path(path)
       return bufnr
     end
   end
+end
+
+function M.archive_solved_problems()
+  local root = M.contest_root(vim.fn.expand("%:p") ~= "" and vim.fn.expand("%:p") or vim.fn.getcwd())
+  local problems_dir = path_join(root, "problems")
+  local sources = vim.fn.glob(problems_dir .. "/*.cpp", false, true)
+
+  table.sort(sources)
+
+  if #sources == 0 then
+    vim.notify("No C++ problems found in " .. problems_dir, vim.log.levels.INFO)
+    return
+  end
+
+  local ast_urls = ast_problem_urls(root)
+  local candidates = {}
+  local skipped = {}
+
+  for _, source in ipairs(sources) do
+    local name = vim.fn.fnamemodify(source, ":t")
+    local url = problem_file_url(source, ast_urls)
+    local contest_id, index = codeforces_problem_id(url)
+    if contest_id and index then
+      candidates[#candidates + 1] = {
+        source = source,
+        name = name,
+        contest_id = contest_id,
+        index = index,
+      }
+    else
+      skipped[#skipped + 1] = name .. ": no Codeforces URL"
+    end
+  end
+
+  if #candidates == 0 then
+    vim.notify("No problem files with Codeforces URLs found in " .. problems_dir, vim.log.levels.WARN)
+    return
+  end
+
+  vim.notify(string.format("Checking %d Codeforces problem%s...", #candidates, #candidates == 1 and "" or "s"))
+  fetch_codeforces_submissions(function(submissions, error)
+    if not submissions then
+      vim.notify(error, vim.log.levels.WARN)
+      return
+    end
+
+    local moved = {}
+    local unsolved = {}
+    local failed = {}
+    local current = vim.fn.expand("%:p")
+
+    for _, candidate in ipairs(candidates) do
+      local accepted, latest = problem_submission_status(submissions, candidate.contest_id, candidate.index)
+      if accepted then
+        write_loaded_buffer_for_path(candidate.source)
+        local ok, result = archive_problem_file(candidate.source)
+        if ok then
+          moved[candidate.source] = result
+        else
+          failed[#failed + 1] = candidate.name .. ": " .. result
+        end
+      elseif latest then
+        unsolved[#unsolved + 1] = candidate.name .. ": " .. (latest.verdict or latest.phase or "submitted")
+      else
+        unsolved[#unsolved + 1] = candidate.name .. ": no matching submissions"
+      end
+    end
+
+    if moved[current] then
+      vim.cmd.edit(vim.fn.fnameescape(moved[current]))
+    end
+
+    local moved_count = vim.tbl_count(moved)
+    local message = string.format(
+      "Moved %d solved problem%s to %s",
+      moved_count,
+      moved_count == 1 and "" or "s",
+      path_join(root, ".done")
+    )
+    local notes = {}
+    vim.list_extend(notes, unsolved)
+    vim.list_extend(notes, skipped)
+    vim.list_extend(notes, failed)
+
+    if #notes > 0 then
+      vim.notify(
+        table.concat(vim.list_extend({ message }, notes), "\n"),
+        failed[1] and vim.log.levels.ERROR or vim.log.levels.WARN
+      )
+    else
+      vim.notify(message)
+    end
+  end)
 end
 
 function M.archive_current_problem()
@@ -372,6 +672,37 @@ function M.archive_current_problem()
   vim.cmd.write()
 
   local ok, result = archive_problem_file(source)
+  if not ok then
+    vim.notify(result, vim.log.levels.ERROR)
+    return
+  end
+
+  local target = result
+  vim.cmd.edit(vim.fn.fnameescape(target))
+  vim.notify("Moved problem to " .. target)
+end
+
+function M.mark_current_problem_undone()
+  local source = vim.fn.expand("%:p")
+  if source == "" or vim.bo.filetype ~= "cpp" then
+    vim.notify("Open a C++ problem file first.", vim.log.levels.WARN)
+    return
+  end
+
+  if vim.fn.filereadable(source) == 0 then
+    vim.notify("Current file has not been written yet.", vim.log.levels.WARN)
+    return
+  end
+
+  vim.cmd.write()
+
+  local dirname = vim.fn.fnamemodify(vim.fn.fnamemodify(source, ":h"), ":t")
+  local ok, result
+  if dirname == ".undone" then
+    ok, result = restore_problem_file_from_undone(source)
+  else
+    ok, result = mark_problem_file_undone(source)
+  end
   if not ok then
     vim.notify(result, vim.log.levels.ERROR)
     return

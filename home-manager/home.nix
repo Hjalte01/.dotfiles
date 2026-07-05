@@ -18,6 +18,19 @@
     pkgs.libGL
   ];
 
+  lutrisWithWineMediaLibs = pkgs.lutris.override {
+    extraLibraries = pkgs': with pkgs'; [
+      at-spi2-core
+      fontconfig
+      libgudev
+      libtheora
+      libvdpau
+      openal
+      speex
+      xz
+    ];
+  };
+
   entmax = pkgs.python313Packages.buildPythonPackage rec {
     pname = "entmax";
     version = "1.3";
@@ -189,6 +202,10 @@ in {
     ffmpeg # Handle the downloade video
 
     steam-run # Run games in Nix
+    lutrisWithWineMediaLibs # Native Lutris with extra Wine-GE media/runtime libs
+    protonup-rs # Manage Wine-GE/Proton-GE runners for Lutris/Steam
+    vulkan-tools # Provides vulkaninfo for checking gaming driver setup
+    mangohud # In-game performance/temperature overlay
     ouch # Extract archives from Nautilus
     unrar # unzip rar files
 
@@ -220,6 +237,7 @@ in {
     lazydocker # Your docker manager
     wlr-randr # Useful for manual display checks
     blueman # A standard Bluetooth manager GUI (since you are missing omarchy-bluetooth)
+    solaar # Logitech Unifying/Bolt receiver manager for devices like Ergo K860
 
     # For Fn-keys
     keyd # Keyboard event monitor/remapping CLI
@@ -437,6 +455,74 @@ in {
       executable = true;
     };
 
+    ".local/bin/geforce-now" = {
+      text = ''
+        #!/bin/sh
+        exec ${pkgs.flatpak}/bin/flatpak run com.nvidia.geforcenow "$@"
+      '';
+      executable = true;
+    };
+
+    ".local/bin/ubisoft-connect" = {
+      text = ''
+        #!/bin/sh
+        export WINEPREFIX="${config.home.homeDirectory}/Games/ubisoft-connect"
+        exec ${pkgs.wineWow64Packages.stable}/bin/wine "$WINEPREFIX/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe" "$@"
+      '';
+      executable = true;
+    };
+
+    ".local/bin/far-cry-3" = {
+      text = ''
+        #!/bin/sh
+        export WINEPREFIX="${config.home.homeDirectory}/Games/ubisoft-connect"
+        exec ${pkgs.wineWow64Packages.stable}/bin/wine "$WINEPREFIX/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe" "uplay://launch/46"
+      '';
+      executable = true;
+    };
+
+    ".local/share/applications/ubisoft-connect.desktop".text = ''
+      [Desktop Entry]
+      Name=Ubisoft Connect
+      GenericName=Game Launcher
+      Comment=Launch Ubisoft Connect through Wine
+      Exec=${config.home.homeDirectory}/.local/bin/ubisoft-connect
+      Icon=F24A_UbisoftConnect.0
+      Type=Application
+      Terminal=false
+      Categories=Game;
+      StartupWMClass=ubisoftconnect.exe
+    '';
+
+    ".local/share/applications/far-cry-3.desktop".text = ''
+      [Desktop Entry]
+      Name=Far Cry 3
+      GenericName=Game
+      Comment=Launch Far Cry 3 through Ubisoft Connect
+      Exec=${config.home.homeDirectory}/.local/bin/far-cry-3
+      Icon=F46_FarCry3.0
+      Type=Application
+      Terminal=false
+      Categories=Game;
+      StartupWMClass=farcry3.exe
+    '';
+
+    ".local/bin/geforcenow" = {
+      text = ''
+        #!/bin/sh
+        exec ${config.home.homeDirectory}/.local/bin/geforce-now "$@"
+      '';
+      executable = true;
+    };
+
+    ".local/bin/gfn" = {
+      text = ''
+        #!/bin/sh
+        exec ${config.home.homeDirectory}/.local/bin/geforce-now "$@"
+      '';
+      executable = true;
+    };
+
     # 7. Bash (Single File)
     ".mybashrc.sh".source = makeLink "bash/.mybashrc.sh" ../bash/.mybashrc.sh;
     ".bash_desktop.sh".source = makeLink "bash/desktop.sh" ../bash/desktop.sh;
@@ -553,6 +639,16 @@ in {
       "text/x-shellscript"
     ];
     categories = ["Utility"];
+  };
+
+  xdg.desktopEntries."geforce-now" = {
+    name = "GeForce Now";
+    genericName = "Cloud Gaming";
+    comment = "Launch GeForce Now";
+    exec = "${config.home.homeDirectory}/.local/bin/geforce-now";
+    icon = "com.nvidia.geforcenow";
+    terminal = false;
+    categories = ["Game"];
   };
 
   xdg.desktopEntries."extract-archive" = {

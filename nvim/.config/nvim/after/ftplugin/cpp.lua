@@ -23,19 +23,12 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     Competitive.ensure_problem_file_location(vim.api.nvim_buf_get_name(args.buf))
   end,
 })
-vim.keymap.set(
-  "n",
-  "<leader>cd",
-  function()
-    require("utils.competitive").archive_current_problem()
-  end,
-  { buffer = true, desc = "Archive Problem as Done" }
-)
-vim.keymap.set(
-  "n",
-  "<leader>cD",
-  function()
-    require("utils.competitive").archive_all_problems()
-  end,
-  { buffer = true, desc = "Archive All Problems as Done" }
-)
+vim.keymap.set("n", "<leader>cd", function()
+  require("utils.competitive").archive_current_problem()
+end, { buffer = true, desc = "Archive Problem as Done" })
+vim.keymap.set("n", "<leader>cu", function()
+  require("utils.competitive").mark_current_problem_undone()
+end, { buffer = true, desc = "Toggle Problem Undone" })
+vim.keymap.set("n", "<leader>cD", function()
+  require("utils.competitive").archive_all_problems()
+end, { buffer = true, desc = "Archive All Problems as Done" })

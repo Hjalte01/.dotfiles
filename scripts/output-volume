@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+action="${1:-}"
+
+case "$action" in
+  raise|lower|mute-toggle) ;;
+  *)
+    echo "Usage: output-volume {raise|lower|mute-toggle}" >&2
+    exit 2
+    ;;
+esac
+
+sink="$(
+  pactl list short sinks | awk '$NF == "RUNNING" { print $2; exit }'
+)"
+
+if [[ -n "$sink" ]]; then
+  pactl set-default-sink "$sink"
+fi
+
+if [[ "$action" == "mute-toggle" ]]; then
+  exec swayosd-client --output-volume mute-toggle
+fi
+
+exec swayosd-client --output-volume "$action" --max-volume 150

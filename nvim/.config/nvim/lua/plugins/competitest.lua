@@ -112,6 +112,20 @@ return {
         desc = "Run Testcases",
       },
       {
+        "<leader>tt",
+        function()
+          require("utils.competitive").check_current_codeforces_solved()
+        end,
+        desc = "Check Codeforces Solved",
+      },
+      {
+        "<leader>tT",
+        function()
+          require("utils.competitive").archive_solved_problems()
+        end,
+        desc = "Archive Solved Codeforces Problems",
+      },
+      {
         "<leader>tD",
         function()
           require("utils.cpp_debug").debug_current_testcase()

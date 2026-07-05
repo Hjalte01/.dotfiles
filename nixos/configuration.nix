@@ -5,13 +5,32 @@
   config,
   pkgs,
   ...
-}: {
+}: let
+  # GeForce NOW's Flatpak probes host networking through xdg-desktop-portal.
+  # One probe incorrectly sends LC_ALL=C as argv[0] instead of using a shell.
+  gfnPortalLocaleCompat = pkgs.writeShellScriptBin "LC_ALL=C" ''
+    export LC_ALL=C
+    exec "$@"
+  '';
+in {
   imports = [
     # Include the results of the hardware scan.
     ./hardware-configuration.nix
   ];
   # Add nixos flakes for reproducibility
   nix.settings.experimental-features = ["nix-command" "flakes"];
+
+  nixpkgs.overlays = [
+    (final: prev: {
+      pkgsi686Linux = prev.pkgsi686Linux.extend (final': prev': {
+        # Lutris' FHS environment currently pulls i686 openldap, whose
+        # syncrepl test is flaky in this build environment.
+        openldap = prev'.openldap.overrideAttrs (old: {
+          doCheck = false;
+        });
+      });
+    })
+  ];
 
   # No SUDO password
   security.sudo.wheelNeedsPassword = false;
@@ -82,6 +101,18 @@
     enable = true;
     enable32Bit = true;
   };
+  hardware.steam-hardware.enable = true;
+
+  programs.steam = {
+    enable = true;
+    remotePlay.openFirewall = true;
+    localNetworkGameTransfers.openFirewall = true;
+  };
+  programs.gamemode.enable = true;
+  programs.gamescope = {
+    enable = true;
+    capSysNice = true;
+  };
 
   # Enable Hyprland Desktop Environment
   programs.hyprland.enable = true;
@@ -89,6 +120,8 @@
   programs.xwayland.enable = true;
   programs.wayvnc.enable = true;
   programs.dconf.enable = true;
+  services.flatpak.enable = true;
+  xdg.portal.enable = true;
 
   systemd.services.ydotoold = {
     description = "ydotool input daemon";
@@ -255,8 +288,11 @@
   environment.systemPackages = with pkgs; [
     #  vim # Do not forget to add an editor to edit configuration.nix! The Nano editor is also installed by default.
     #  wget
+    gfnPortalLocaleCompat
     git
+    iw
     vagrant
+    wireguard-tools
   ];
 
   # ==========================================

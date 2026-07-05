@@ -10,7 +10,7 @@ return {
             { id = "stacks", size = 0.08 },
             { id = "breakpoints", size = 0.08 },
           },
-          size = 45,
+          size = 0.25,
           position = "left",
         },
         {

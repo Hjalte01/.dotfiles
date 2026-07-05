@@ -48,6 +48,7 @@ in {
     tmux
     tree
     unzip
+    usbutils
     wget
     zsh
     zotero

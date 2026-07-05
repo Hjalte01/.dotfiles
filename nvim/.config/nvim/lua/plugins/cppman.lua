@@ -1,6 +1,89 @@
 local cookbook_path = vim.fn.stdpath("config") .. "/docs/cpp/cookbook.md"
 local review_section = "## Codex Cookbook Review"
 
+local function resolve_cookbook_item_path(item)
+  if not item or not item.file then
+    return nil
+  end
+
+  if vim.fn.fnamemodify(item.file, ":p") == item.file then
+    return item.file
+  end
+
+  return vim.fs.joinpath(vim.fn.stdpath("config"), "docs/cpp", item.file)
+end
+
+local function section_end(lines, start_line)
+  for i = start_line + 1, #lines do
+    if lines[i]:match("^##%s+") then
+      return i - 1
+    end
+  end
+
+  return #lines
+end
+
+local function code_block_around_or_after(lines, line_nr)
+  local open_line
+
+  for i = 1, line_nr do
+    if lines[i]:match("^```") then
+      open_line = open_line and nil or i
+    end
+  end
+
+  if open_line then
+    for i = line_nr + 1, #lines do
+      if lines[i]:match("^```") then
+        return vim.list_slice(lines, open_line + 1, i - 1)
+      end
+    end
+  end
+
+  local last_heading = 1
+  for i = line_nr, 1, -1 do
+    if lines[i]:match("^##%s+") then
+      last_heading = i
+      break
+    end
+  end
+
+  local stop_line = section_end(lines, last_heading)
+  for i = line_nr + 1, stop_line do
+    if lines[i]:match("^```") then
+      for j = i + 1, stop_line do
+        if lines[j]:match("^```") then
+          return vim.list_slice(lines, i + 1, j - 1)
+        end
+      end
+      break
+    end
+  end
+
+  return nil
+end
+
+local function yank_cookbook_code_block(picker, item, action)
+  local path = resolve_cookbook_item_path(item)
+  local line_nr = item and item.pos and item.pos[1] or nil
+  if not path or not line_nr or vim.fn.filereadable(path) ~= 1 then
+    vim.notify("Could not find cookbook entry to yank", vim.log.levels.WARN)
+    return
+  end
+
+  local lines = vim.fn.readfile(path)
+  local block = code_block_around_or_after(lines, line_nr)
+  if not block or #block == 0 then
+    vim.notify("No code block found for this cookbook entry", vim.log.levels.WARN)
+    return
+  end
+
+  local reg = action and action.reg or vim.v.register
+  local value = table.concat(block, "\n")
+  vim.fn.setreg(reg, value)
+  vim.notify(("Yanked cookbook code block to register `%s`"):format(reg), vim.log.levels.INFO)
+end
+
 local function visual_selection_lines()
   local start_pos = vim.fn.getpos("'<")
   local end_pos = vim.fn.getpos("'>")
@@ -99,6 +182,21 @@ return {
           title = "C++ Cookbook",
           cwd = vim.fn.stdpath("config") .. "/docs/cpp",
           hidden = true,
+          actions = {
+            cookbook_yank_code_block = yank_cookbook_code_block,
+          },
+          win = {
+            input = {
+              keys = {
+                ["yy"] = { "cookbook_yank_code_block", mode = "n" },
+              },
+            },
+            list = {
+              keys = {
+                ["yy"] = "cookbook_yank_code_block",
+              },
+            },
+          },
         })
       end,
       desc = "[C++] cookbook search",
