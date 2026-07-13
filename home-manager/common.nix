@@ -94,6 +94,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/update-codex" = {
+      source = ../scripts/update-codex;
+      executable = true;
+    };
+
     ".config/lazygit/config.yml" = {
       force = true;
       text = ''

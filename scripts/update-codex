@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+package_file="${CODEX_NIX_FILE:-$HOME/.dotfiles/pkgs/codex-cli.nix}"
+registry_url='https://registry.npmjs.org/@openai%2Fcodex/latest'
+
+for command_name in curl jq nix node; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    printf 'update-codex: missing required command: %s\n' "$command_name" >&2
+    exit 1
+  fi
+done
+
+if [[ ! -f "$package_file" ]]; then
+  printf 'update-codex: package file not found: %s\n' "$package_file" >&2
+  exit 1
+fi
+
+printf 'Checking the npm registry for the latest Codex release...\n'
+version="$(curl --fail --silent --show-error --location "$registry_url" | jq --exit-status --raw-output '.version')"
+
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  printf 'update-codex: registry returned an unexpected version: %s\n' "$version" >&2
+  exit 1
+fi
+
+package_url="https://registry.npmjs.org/@openai/codex/-/codex-${version}.tgz"
+native_url="https://registry.npmjs.org/@openai/codex/-/codex-${version}-linux-x64.tgz"
+
+printf 'Prefetching Codex %s archives...\n' "$version"
+package_hash="$(nix store prefetch-file --json "$package_url" | jq --exit-status --raw-output '.hash')"
+native_hash="$(nix store prefetch-file --json "$native_url" | jq --exit-status --raw-output '.hash')"
+
+node - "$package_file" "$version" "$package_hash" "$native_hash" <<'NODE'
+const fs = require("fs");
+
+const [packageFile, version, packageHash, nativeHash] = process.argv.slice(2);
+const original = fs.readFileSync(packageFile, "utf8");
+
+const replacements = [
+  {
+    pattern: /^  version = "[^"]+";$/gm,
+    replacement: `  version = "${version}";`,
+    description: "version",
+  },
+  {
+    pattern: /(url = "https:\/\/registry\.npmjs\.org\/@openai\/codex\/-\/codex-\$\{version\}\.tgz";\n    hash = )"[^"]+";/g,
+    replacement: `$1"${packageHash}";`,
+    description: "package hash",
+  },
+  {
+    pattern: /(url = "https:\/\/registry\.npmjs\.org\/@openai\/codex\/-\/codex-\$\{version\}-linux-x64\.tgz";\n    hash = )"[^"]+";/g,
+    replacement: `$1"${nativeHash}";`,
+    description: "Linux x64 hash",
+  },
+];
+
+let updated = original;
+for (const { pattern, replacement, description } of replacements) {
+  const matches = [...updated.matchAll(pattern)];
+  if (matches.length !== 1) {
+    throw new Error(`expected exactly one ${description} field, found ${matches.length}`);
+  }
+  updated = updated.replace(pattern, replacement);
+}
+
+if (updated === original) {
+  console.log(`Codex ${version} is already current; no changes made.`);
+  process.exit(0);
+}
+
+const temporaryFile = `${packageFile}.tmp-${process.pid}`;
+const mode = fs.statSync(packageFile).mode;
+fs.writeFileSync(temporaryFile, updated, { mode });
+fs.renameSync(temporaryFile, packageFile);
+console.log(`Updated ${packageFile} to Codex ${version}.`);
+NODE
