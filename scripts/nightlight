@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}"
+state_file="$state_dir/nightlight-override"
+menu_bin="${NIGHTLIGHT_ROFI:-$HOME/.local/bin/rofi-menu}"
+temperature="${NIGHTLIGHT_TEMPERATURE:-4500}"
+rofi_args=()
+
+if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
+  rofi_args+=(--fullscreen)
+fi
+
+notify() {
+  notify-send "Night light" "$1" -t 2500 || true
+}
+
+ensure_daemon() {
+  if ! systemctl --user is-active --quiet hyprsunset.service; then
+    systemctl --user start hyprsunset.service >/dev/null 2>&1 || true
+    sleep 0.2
+  fi
+}
+
+in_night_hours() {
+  local hour
+  hour="$(date +%H)"
+  ((10#$hour >= 18 || 10#$hour < 4))
+}
+
+set_on() {
+  ensure_daemon
+  hyprctl hyprsunset temperature "$temperature" >/dev/null
+  mkdir -p "$state_dir"
+  printf '%s\n' on >"$state_file"
+  notify "On (${temperature}K)"
+}
+
+set_off() {
+  ensure_daemon
+  hyprctl hyprsunset identity >/dev/null
+  mkdir -p "$state_dir"
+  printf '%s\n' off >"$state_file"
+  notify "Off until the next schedule change"
+}
+
+reset_schedule() {
+  ensure_daemon
+  if in_night_hours; then
+    hyprctl hyprsunset temperature "$temperature" >/dev/null
+  else
+    hyprctl hyprsunset identity >/dev/null
+  fi
+  rm -f "$state_file"
+  notify "Back on schedule (18:00-04:00)"
+}
+
+status() {
+  if [[ -f "$state_file" ]]; then
+    printf 'manual-%s\n' "$(cat "$state_file")"
+  elif in_night_hours; then
+    printf '%s\n' scheduled-on
+  else
+    printf '%s\n' scheduled-off
+  fi
+}
+
+toggle() {
+  case "$(status)" in
+    manual-on|scheduled-on)
+      set_off
+      ;;
+    manual-off|scheduled-off)
+      set_on
+      ;;
+  esac
+}
+
+menu() {
+  local current selection
+  current="$(status)"
+  selection="$(
+    printf '%s\n' \
+      "Toggle ($current)" \
+      "On now" \
+      "Off now" \
+      "Reset to schedule" \
+      "Warmer" \
+      "Cooler" |
+      "$menu_bin" "${rofi_args[@]}" -dmenu -i -p "Night light"
+  )"
+
+  case "$selection" in
+    "Toggle "*)
+      toggle
+      ;;
+    "On now")
+      set_on
+      ;;
+    "Off now")
+      set_off
+      ;;
+    "Reset to schedule")
+      reset_schedule
+      ;;
+    Warmer)
+      ensure_daemon
+      hyprctl hyprsunset temperature 3800 >/dev/null
+      mkdir -p "$state_dir"
+      printf '%s\n' on >"$state_file"
+      notify "Warmer (3800K)"
+      ;;
+    Cooler)
+      ensure_daemon
+      hyprctl hyprsunset temperature 5200 >/dev/null
+      mkdir -p "$state_dir"
+      printf '%s\n' on >"$state_file"
+      notify "Cooler (5200K)"
+      ;;
+    "")
+      exit 0
+      ;;
+    *)
+      notify "Unknown action: $selection"
+      exit 1
+      ;;
+  esac
+}
+
+case "${1:-toggle}" in
+  on)
+    set_on
+    ;;
+  off)
+    set_off
+    ;;
+  reset)
+    reset_schedule
+    ;;
+  status)
+    status
+    ;;
+  toggle)
+    toggle
+    ;;
+  menu)
+    menu
+    ;;
+  *)
+    printf 'Usage: %s {toggle|menu|on|off|reset|status}\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac

@@ -108,17 +108,29 @@ format_keybinds() {
       }
       next
     }
-    /^[ \t]*bind(el|l)?[ \t]*=/ {
+    /^[ \t]*bind(e|el|l)?[ \t]*=/ {
       line = $0
       override = title_from_comment(line)
       line = strip_keybind_comment(line)
-      sub(/^[ \t]*bind(el|l)?[ \t]*=[ \t]*/, "", line)
+      sub(/^[ \t]*bind(e|el|l)?[ \t]*=[ \t]*/, "", line)
       n = split(line, parts, ",")
       if (n >= 4) {
         title = override != "" ? override : trim(parts[3])
         command = trim(parts[4])
         for (i = 5; i <= n; i++) command = command ", " trim(parts[i])
         emit(parts[1], parts[2], title, command)
+      }
+      next
+    }
+    /^[ \t]*bindm[ \t]*=/ {
+      line = $0
+      override = title_from_comment(line)
+      line = strip_keybind_comment(line)
+      sub(/^[ \t]*bindm[ \t]*=[ \t]*/, "", line)
+      n = split(line, parts, ",")
+      if (n >= 3) {
+        title = override != "" ? override : trim(parts[3])
+        emit(parts[1], parts[2], title, trim(parts[3]))
       }
     }
   ' "$source_file"

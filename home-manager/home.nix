@@ -227,6 +227,7 @@ in {
     # --- hypr window-manager ---
     waybar
     rofi
+    hyprsunset
 
     # For your custom scripts
     ydotool # Wayland input helper for the autoclicker
@@ -322,6 +323,11 @@ in {
 
     ".local/bin/waybar-toggle" = {
       source = makeLink "scripts/waybar-toggle" ../scripts/waybar-toggle;
+      executable = true;
+    };
+
+    ".local/bin/nightlight" = {
+      source = makeLink "scripts/nightlight" ../scripts/nightlight;
       executable = true;
     };
 
@@ -529,6 +535,7 @@ in {
 
     # 8. Hyprland (Single File)
     ".config/hypr/hyprland.conf".source = makeLink "hypr/hyprland.conf" ../hypr/hyprland.conf;
+    ".config/hypr/hyprsunset.conf".source = makeLink "hypr/hyprsunset.conf" ../hypr/hyprsunset.conf;
 
     # 9. Waybar Dev Badge Trigger
     ".cache/dev-mode-status".text =
@@ -569,6 +576,22 @@ in {
 
     Service = {
       ExecStart = "%h/.local/bin/battery-alert";
+      Restart = "always";
+      RestartSec = 2;
+    };
+
+    Install.WantedBy = ["graphical-session.target"];
+  };
+
+  systemd.user.services.hyprsunset = {
+    Unit = {
+      Description = "Hyprland blue-light filter";
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+
+    Service = {
+      ExecStart = "${pkgs.hyprsunset}/bin/hyprsunset";
       Restart = "always";
       RestartSec = 2;
     };
