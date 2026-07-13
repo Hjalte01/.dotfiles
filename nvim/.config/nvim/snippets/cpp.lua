@@ -1,43 +1,19 @@
 local ls = require("luasnip")
 local s = ls.snippet
-local t = ls.text_node
 local i = ls.insert_node
 local fmt = require("luasnip.extras.fmt").fmt
 
+local function cpp_template_snippet()
+  local path = vim.fn.stdpath("config") .. "/templates/main.cpp"
+  local template = table.concat(vim.fn.readfile(path), "\n")
+  local body, cursor_count = template:gsub("(\n  while %(t%-%-%) {\n)[ \t]*\n", "%1    $1\n", 1)
+
+  assert(cursor_count == 1, "Could not find the cpp snippet cursor position in " .. path)
+  return ls.parser.parse_snippet("cpp", body)
+end
+
 return {
-  s(
-    "cpp",
-    fmt(
-      [[
-#include <bits/stdc++.h>
-using namespace std;
-
-typedef long long ll;
-
-#define F first
-#define S second
-#define PB push_back
-#define MP make_pair
-
-
-int main() {{
-  ios::sync_with_stdio(0);
-  cin.tie(0);
-
-  ll t;
-  cin >> t;
-  while (t--) {{
-    {}
-  }}
-
-  return 0;
-}}
-]],
-      {
-        i(1),
-      }
-    )
-  ),
+  cpp_template_snippet(),
   s(
     "strcnt",
     fmt(
