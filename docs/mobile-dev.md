@@ -97,6 +97,8 @@ The server shell auto-attaches to `tmux new-session -A -s main` for SSH sessions
 - `cd.`: go to `~/.dotfiles`.
 - `nxb`: rebuild the VPS with `sudo nixos-rebuild switch --flake ~/.dotfiles#mobile-dev`.
 
+Docker is enabled for both NixOS hosts through the shared module in `flake.nix`, and `hjalte` is a member of the `docker` group so Docker commands do not require `sudo`.
+
 The shared `c` and `cmdc` helpers use Wayland clipboard locally when available, otherwise OSC52 escape sequences. OSC52 is enabled through tmux with `set-clipboard` and `allow-passthrough`, so remote copies may reach the local terminal clipboard if the phone SSH client supports OSC52.
 
 ## Git On VPS

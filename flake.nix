@@ -26,11 +26,18 @@
     disko,
     breakd,
     ...
-  } @ inputs: {
+  } @ inputs: let
+    # System configuration shared by the main PC and mobile VPS.
+    commonNixosModule = {...}: {
+      virtualisation.docker.enable = true;
+      users.users.hjalte.extraGroups = ["docker"];
+    };
+  in {
     nixosConfigurations = {
       nixos = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
+          commonNixosModule
           ./nixos/hardware-configuration.nix
           ./nixos/configuration.nix
           breakd.nixosModules.default
@@ -49,6 +56,7 @@
       mobile-dev = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
+          commonNixosModule
           disko.nixosModules.disko
           ./nixos/mobile-dev.nix
 

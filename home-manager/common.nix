@@ -1,9 +1,27 @@
 {
   config,
+  osConfig ? {},
   pkgs,
   ...
 }: let
   codex = pkgs.callPackage ../pkgs/codex-cli.nix {};
+  hostName = osConfig.networking.hostName or "unknown";
+  hostContext =
+    if hostName == "mobile-dev"
+    then ''
+      ## This Host
+
+      - This machine is the `mobile-dev` VPS, intended for phone-driven remote Codex work.
+      - Its NixOS configuration is `nixos/mobile-dev.nix` and its flake target is `mobile-dev`.
+      - Keep VPS-specific system and Home Manager changes in the mobile-dev modules.
+    ''
+    else ''
+      ## This Host
+
+      - This machine is the main PC (`${hostName}`), not the mobile VPS.
+      - Its NixOS configuration is `nixos/configuration.nix` and its flake target is `nixos`.
+      - Keep desktop-specific system and Home Manager changes in the desktop modules.
+    '';
 in {
   home.username = "hjalte";
   home.homeDirectory = "/home/hjalte";
@@ -66,6 +84,8 @@ in {
       - Host-specific changes should stay in the relevant PC or mobile VPS modules.
       - Manual fixes are acceptable only when a declarative solution is not practical yet; when possible, leave the work in a state that can be made reproducible later.
       - After changing NixOS, Home Manager, Neovim, shell, Hyprland, or other dotfiles that are activated through the flake, run `nxb` before finishing so the live system matches the repository. If the user explicitly says not to run `nxb` or gives a conflicting instruction, follow the user's latest explicit instruction instead.
+
+      ${hostContext}
 
       ## Shared Context Locations
 
