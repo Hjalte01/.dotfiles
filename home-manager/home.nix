@@ -196,6 +196,9 @@ in {
     imv # billedeviser til wayland
     mpv # videoafspilere
     zathura # PDF/document viewer
+    blender
+    freecad
+    inkscape
     libnotify # beskeder om ting virker?
     mako # notification daemon for notify-send popups on Wayland
     yt-dlp # Download youtube vid

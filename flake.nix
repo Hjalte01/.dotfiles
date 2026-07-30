@@ -15,6 +15,8 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    breakd.url = "github:simonwinther/breakd";
   };
 
   outputs = {
@@ -22,6 +24,7 @@
     nixpkgs,
     home-manager,
     disko,
+    breakd,
     ...
   } @ inputs: {
     nixosConfigurations = {
@@ -30,6 +33,7 @@
         modules = [
           ./nixos/hardware-configuration.nix
           ./nixos/configuration.nix
+          breakd.nixosModules.default
 
           # Setup Home Manager as a module
           home-manager.nixosModules.home-manager

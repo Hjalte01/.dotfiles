@@ -28,6 +28,60 @@ PROBLEM_PATTERNS = (
 )
 
 
+def firefox_headers():
+    version = None
+    compatibility = FIREFOX_PROFILE / "compatibility.ini"
+    try:
+        match = re.search(r"^LastVersion=(\d+)", compatibility.read_text(), re.MULTILINE)
+        if match:
+            version = match.group(1)
+    except OSError:
+        pass
+
+    user_agent = "Mozilla/5.0 codeforces-auto-pull"
+    if version:
+        user_agent = (
+            f"Mozilla/5.0 (X11; Linux x86_64; rv:{version}.0) "
+            f"Gecko/20100101 Firefox/{version}.0"
+        )
+    headers = {"User-Agent": user_agent}
+
+    db = FIREFOX_PROFILE / "cookies.sqlite"
+    if not db.exists():
+        return headers
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="codeforces-cookies-") as tmp:
+            snapshot = Path(tmp) / "cookies.sqlite"
+            shutil.copy2(db, snapshot)
+            for suffix in ("-wal", "-shm"):
+                sidecar = Path(f"{db}{suffix}")
+                if sidecar.exists():
+                    shutil.copy2(sidecar, Path(f"{snapshot}{suffix}"))
+
+            conn = sqlite3.connect(f"file:{snapshot}?mode=ro", uri=True)
+            try:
+                cookies = conn.execute(
+                    """
+                    select name, value
+                    from moz_cookies
+                    where host in ('codeforces.com', '.codeforces.com')
+                      and name = 'cf_clearance'
+                      and (expiry = 0 or expiry > ?)
+                    """,
+                    (int(time.time()),),
+                ).fetchall()
+            finally:
+                conn.close()
+    except (OSError, sqlite3.Error) as error:
+        print(f"codeforces-auto-pull: could not read Firefox cookies: {error}", file=sys.stderr, flush=True)
+        return headers
+
+    if cookies:
+        headers["Cookie"] = "; ".join(f"{name}={value}" for name, value in cookies)
+    return headers
+
+
 def problem_key(url):
     parsed = urlparse(url)
     if parsed.netloc.lower() not in {"codeforces.com", "www.codeforces.com"}:
@@ -254,9 +308,7 @@ def update_seen_ast_mtime(seen, url, mtime):
 def fetch_task(url):
     request = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": "Mozilla/5.0 codeforces-auto-pull",
-        },
+        headers=firefox_headers(),
     )
     with urllib.request.urlopen(request, timeout=10) as response:
         body = response.read().decode(response.headers.get_content_charset() or "utf-8", errors="replace")

@@ -29,6 +29,7 @@ in {
     delta
     difftastic
     fd
+    fastfetch
     fzf
     gcc
     gh

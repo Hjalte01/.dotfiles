@@ -74,6 +74,7 @@ in {
   # Enable networking
   networking.networkmanager.enable = true;
   services.tailscale.enable = true;
+  services.breakd.enable = true;
 
   # Set your time zone.
   time.timeZone = "Europe/Copenhagen";
@@ -295,6 +296,27 @@ in {
     wireguard-tools
   ];
 
+  # Remap the MX Master 3S thumb buttons without losing its high-resolution
+  # vertical or horizontal scroll events.
+  services.evremap = {
+    enable = true;
+    settings = {
+      device_name = "Logitech MX Master 3S";
+      remap = [
+        {
+          # Rear thumb button: act as a held middle button for CAD navigation.
+          input = ["BTN_SIDE"];
+          output = ["BTN_MIDDLE"];
+        }
+        {
+          # Front thumb button: disable browser forward navigation.
+          input = ["BTN_EXTRA"];
+          output = [];
+        }
+      ];
+    };
+  };
+
   # ==========================================
   # KEYBOARD REMAPPING (keyd)
   # ==========================================
@@ -391,7 +413,7 @@ in {
       KbdInteractiveAuthentication = false;
     };
   };
-  
+
   # Discord bot timer
   services.cron.enable = true;
 

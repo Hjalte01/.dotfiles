@@ -1,5 +1,23 @@
 {
   "nodes": {
+    "breakd": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1784134436,
+        "narHash": "sha256-RiYd3eK30vHDLmxLzZ0OkBwzPgZpkibM5JRyzaIxJic=",
+        "owner": "simonwinther",
+        "repo": "breakd",
+        "rev": "e9e27655e803d79cece8160d29904fa68368b084",
+        "type": "github"
+      },
+      "original": {
+        "owner": "simonwinther",
+        "repo": "breakd",
+        "type": "github"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -42,6 +60,22 @@
     },
     "nixpkgs": {
       "locked": {
+        "lastModified": 1784007870,
+        "narHash": "sha256-djcLt/JJphyNt4eDY9XTly+/WbCK5lqWq9lSgCmJkkQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "18b9261cb3294b6d2a06d03f96872827b8fe2698",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
         "lastModified": 1778869304,
         "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
         "owner": "nixos",
@@ -58,9 +92,10 @@
     },
     "root": {
       "inputs": {
+        "breakd": "breakd",
         "disko": "disko",
         "home-manager": "home-manager",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs_2"
       }
     }
   },
