@@ -6,6 +6,7 @@ export BROWSER=firefox
 alias open='xdg-open'
 alias p='wl-paste'
 alias v='wl-paste'
+alias vps='ssh vps'
 
 alias hypr="nvim $HOME/.dotfiles/hypr/hyprland.conf"
 alias brc.=". $HOME/.bash_common.sh; . $HOME/.bash_desktop.sh"
