@@ -31,6 +31,35 @@
     ];
   };
 
+  prismLauncherWithJava = pkgs.prismlauncher.override {
+    jdks = with pkgs; [
+      jdk25
+      jdk21
+      jdk17
+      jdk8
+    ];
+  };
+
+  kobberfaldClientClean = pkgs.writeShellApplication {
+    name = "kobberfald-client-clean";
+    text = ''
+      exec ${prismLauncherWithJava}/bin/prismlauncher \
+        --launch kobberfald-clean-26.1.2 \
+        --server localhost \
+        "$@"
+    '';
+  };
+
+  kobberfaldClientPlay = pkgs.writeShellApplication {
+    name = "kobberfald-client-play";
+    text = ''
+      exec ${prismLauncherWithJava}/bin/prismlauncher \
+        --launch kobberfald-play-26.1.2 \
+        --server localhost \
+        "$@"
+    '';
+  };
+
   entmax = pkgs.python313Packages.buildPythonPackage rec {
     pname = "entmax";
     version = "1.3";
@@ -211,6 +240,9 @@ in {
     mangohud # In-game performance/temperature overlay
     ouch # Extract archives from Nautilus
     unrar # unzip rar files
+    prismLauncherWithJava # Isolated Minecraft development instances
+    kobberfaldClientClean
+    kobberfaldClientPlay
 
     wineWow64Packages.stable
     winetricks
