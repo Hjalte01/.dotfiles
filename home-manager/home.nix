@@ -286,6 +286,7 @@ in {
 
     grim # takes the picture
     slurp # Drags the captured picture
+    wf-recorder # Record the Wayland screen
 
     # --- Nvim nix packages instead of Mason ---
     vscode-langservers-extracted

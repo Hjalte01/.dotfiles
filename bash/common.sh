@@ -34,6 +34,27 @@ alias flake='nvim ~/.dotfiles/flake.nix'
 alias cx='codex'
 alias ta='tmux new-session -A -s main'
 
+# Default interactive Codex sessions to unrestricted mode. Pass --no-yolo to
+# bypass this wrapper default and use the permissions configured by Codex.
+codex() {
+  local arg yolo=1
+  local -a codex_args=()
+
+  for arg in "$@"; do
+    if [ "$arg" = "--no-yolo" ]; then
+      yolo=0
+    else
+      codex_args+=("$arg")
+    fi
+  done
+
+  if [ "$yolo" -eq 1 ]; then
+    command codex --yolo "${codex_args[@]}"
+  else
+    command codex "${codex_args[@]}"
+  fi
+}
+
 gdiff() {
   if command -v delta >/dev/null 2>&1; then
     if [ "$#" -eq 0 ]; then
