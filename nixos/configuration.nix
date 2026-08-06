@@ -63,6 +63,14 @@ in {
   boot.loader.efi.canTouchEfiVariables = true;
   # Work around a MediaTek MT7921 Bluetooth regression in current stable kernels.
   boot.kernelPackages = pkgs.linuxPackages_6_6;
+  # Linux 6.16 added this model-specific quirk. Backport it while retaining the
+  # 6.6 kernel required above so the Yoga's internal digital microphone appears.
+  boot.kernelPatches = [
+    {
+      name = "yoga-7-16arp8-microphone";
+      patch = ./patches/yoga-7-16arp8-microphone.patch;
+    }
+  ];
 
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.

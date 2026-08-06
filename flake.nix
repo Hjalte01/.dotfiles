@@ -17,6 +17,11 @@
     };
 
     breakd.url = "github:simonwinther/breakd";
+
+    handy = {
+      url = "github:cjpais/Handy/v0.9.4";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -25,6 +30,7 @@
     home-manager,
     disko,
     breakd,
+    handy,
     ...
   } @ inputs: let
     # System configuration shared by the main PC and mobile VPS.
@@ -47,6 +53,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
+            home-manager.sharedModules = [handy.homeManagerModules.default];
             # REPLACE "yourusername" with your actual linux username!
             home-manager.users.hjalte = import ./home-manager/home.nix;
           }

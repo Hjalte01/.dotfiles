@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+state_file="$runtime_dir/handy-recording"
+notification_tag="handy-dictation"
+
+notify_state() {
+  notify-send \
+    --app-name="Handy" \
+    --hint="string:x-canonical-private-synchronous:$notification_tag" \
+    "$@"
+}
+
+handy_pid="$(pgrep -n -f '/bin/handy$' || true)"
+if [[ -z "$handy_pid" ]]; then
+  rm -f "$state_file"
+  notify_state --urgency=critical --expire-time=4000 \
+    "Dictation unavailable" "Handy is not running."
+  exit 1
+fi
+
+# A service restart invalidates any recording marker left by an older process.
+if [[ -e "$state_file" && "$state_file" -ot "/proc/$handy_pid" ]]; then
+  rm -f "$state_file"
+fi
+
+if [[ -e "$state_file" ]]; then
+  pkill -USR2 -n handy
+  rm -f "$state_file"
+  notify_state --expire-time=2500 \
+    "Dictation stopped" "Transcribing and inserting text…"
+else
+  pkill -USR2 -n handy
+  : >"$state_file"
+  notify_state --expire-time=0 \
+    "🎙 Dictation is ON" "Press F11 to stop and insert text."
+fi

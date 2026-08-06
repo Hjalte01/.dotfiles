@@ -214,12 +214,14 @@ in {
   ];
 
   services.easyeffects.enable = true;
+  services.handy.enable = true;
 
   # Packages you want installed just for your user
   home.packages = with pkgs; [
     stdenv.cc.cc.lib # Runtime libstdc++ for Python ML wheels
     zlib # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
+    wtype # Wayland text insertion for Handy dictation
     cliphist # Clipboard history
     file # Detect text/image types for Codex clipboard history captures
     imv # billedeviser til wayland
@@ -419,6 +421,11 @@ in {
 
     ".local/bin/app-audio-mute" = {
       source = makeLink "scripts/app-audio-mute" ../scripts/app-audio-mute;
+      executable = true;
+    };
+
+    ".local/bin/handy-toggle" = {
+      source = makeLink "scripts/handy-toggle" ../scripts/handy-toggle;
       executable = true;
     };
 
