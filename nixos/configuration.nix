@@ -337,7 +337,7 @@ in {
           main = {
             brightnessdown = "brightnessdown";
             brightnessup = "brightnessup";
-            switchvideomode = "M-t";
+            switchvideomode = "display";
           };
         };
       };
@@ -347,9 +347,23 @@ in {
           main = {
             micmute = "micmute";
             rfkill = "noop";
-            switchvideomode = "M-t";
-            nextsong = "M-m";
-            f9 = "M-m";
+            switchvideomode = "display";
+            nextsong = "nextsong";
+            f9 = "f9";
+          };
+        };
+      };
+      laptop-keyboard = {
+        ids = ["0001:0001"];
+        settings = {
+          # The Yoga's physical PrtSc key emits Super+Shift+S. Normalize that
+          # firmware chord to Print so Hyprland's Print and Alt+Print bindings
+          # work as labelled on the keycap.
+          "meta+shift" = {
+            s = "print";
+          };
+          "alt+meta+shift" = {
+            s = "A-print";
           };
         };
       };

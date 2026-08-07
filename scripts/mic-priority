@@ -1,0 +1,513 @@
+#!/usr/bin/env python3
+"""Automatic PipeWire microphone priority and an interactive Textual UI."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import selectors
+import signal
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+APP_NAME = "mic-priority"
+CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+RUNTIME_HOME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+CONFIG_PATH = CONFIG_HOME / APP_NAME / "config.json"
+OVERRIDE_PATH = RUNTIME_HOME / APP_NAME / "override.json"
+PACTL = os.environ.get("MIC_PRIORITY_PACTL", "pactl")
+
+
+@dataclass(frozen=True)
+class Source:
+    name: str
+    description: str
+    connected: bool = True
+    monitor: bool = False
+
+
+def run_pactl(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [PACTL, *args],
+        check=check,
+        text=True,
+        capture_output=True,
+    )
+
+
+def discover_sources() -> dict[str, Source]:
+    result = run_pactl("-f", "json", "list", "sources")
+    sources: dict[str, Source] = {}
+    for raw in json.loads(result.stdout):
+        name = str(raw.get("name", ""))
+        if not name:
+            continue
+        monitor = bool(raw.get("monitor_source")) or name.endswith(".monitor")
+        availability = str(raw.get("availability", "unknown")).lower()
+        ports = raw.get("ports") or []
+        port_states = {
+            str(port.get("availability", "unknown")).lower()
+            for port in ports
+            if isinstance(port, dict)
+        }
+        ports_unavailable = bool(port_states) and port_states <= {
+            "no",
+            "not available",
+            "unavailable",
+        }
+        sources[name] = Source(
+            name=name,
+            description=str(raw.get("description") or name),
+            connected=availability not in {"no", "not available", "unavailable"}
+            and not ports_unavailable,
+            monitor=monitor,
+        )
+    return sources
+
+
+def empty_config() -> dict[str, Any]:
+    return {"version": 1, "order": [], "disabled": [], "labels": {}}
+
+
+def load_config() -> dict[str, Any]:
+    try:
+        raw = json.loads(CONFIG_PATH.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return empty_config()
+    config = empty_config()
+    if isinstance(raw, dict):
+        config["order"] = list(dict.fromkeys(map(str, raw.get("order", []))))
+        config["disabled"] = list(dict.fromkeys(map(str, raw.get("disabled", []))))
+        labels = raw.get("labels", {})
+        if isinstance(labels, dict):
+            config["labels"] = {str(key): str(value) for key, value in labels.items()}
+    return config
+
+
+def save_config(config: dict[str, Any]) -> None:
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary = CONFIG_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n")
+    temporary.replace(CONFIG_PATH)
+
+
+def merge_discovered(
+    config: dict[str, Any], sources: dict[str, Source], current: str | None = None
+) -> bool:
+    changed = False
+    order: list[str] = config["order"]
+    disabled: list[str] = config["disabled"]
+    labels: dict[str, str] = config["labels"]
+    first_discovery = not order
+    discovered = list(sources.values())
+    if first_discovery:
+        # Keep activation non-disruptive while still putting a Yeti above the
+        # microphone that was already the user's default.
+        discovered.sort(
+            key=lambda source: (
+                0 if "yeti" in f"{source.name} {source.description}".lower() else 1,
+                0 if source.name == current else 1,
+                1 if source.monitor else 0,
+            )
+        )
+    for source in discovered:
+        if source.name not in labels or labels[source.name] != source.description:
+            labels[source.name] = source.description
+            changed = True
+        if source.name not in order:
+            # A newly discovered Yeti gets the expected best initial priority.
+            if not first_discovery and "yeti" in f"{source.name} {source.description}".lower():
+                order.insert(0, source.name)
+            else:
+                order.append(source.name)
+            changed = True
+        # PulseAudio monitor sources are speaker loopbacks, never microphones.
+        if source.monitor and source.name not in disabled:
+            disabled.append(source.name)
+            changed = True
+    return changed
+
+
+def load_override() -> str | None:
+    try:
+        raw = json.loads(OVERRIDE_PATH.read_text())
+        value = raw.get("source")
+        return str(value) if value else None
+    except (FileNotFoundError, json.JSONDecodeError, OSError, AttributeError):
+        return None
+
+
+def set_override(source: str | None) -> None:
+    if source is None:
+        OVERRIDE_PATH.unlink(missing_ok=True)
+        return
+
+    OVERRIDE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary = OVERRIDE_PATH.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"source": source}) + "\n")
+    temporary.replace(OVERRIDE_PATH)
+
+
+def default_source() -> str | None:
+    result = run_pactl("info", check=False)
+    if result.returncode:
+        return None
+    for line in result.stdout.splitlines():
+        if line.startswith("Default Source:"):
+            return line.partition(":")[2].strip() or None
+    return None
+
+
+def choose_source(
+    config: dict[str, Any], sources: dict[str, Source], override: str | None
+) -> tuple[str | None, str | None]:
+    usable = {
+        name
+        for name, source in sources.items()
+        if source.connected and not source.monitor
+    }
+    if override in usable:
+        return override, override
+    override = None
+    disabled = set(config["disabled"])
+    for name in config["order"]:
+        if name in usable and name not in disabled:
+            return name, override
+    return None, override
+
+
+def reconcile(*, dry_run: bool = False) -> dict[str, Any]:
+    sources = discover_sources()
+    config = load_config()
+    current = default_source()
+    changed = merge_discovered(config, sources, current)
+    override_before = load_override()
+    target, override_after = choose_source(config, sources, override_before)
+
+    if not dry_run:
+        if changed:
+            save_config(config)
+        if override_after != override_before:
+            set_override(override_after)
+        if target and target != current:
+            run_pactl("set-default-source", target)
+
+    return {
+        "current": current,
+        "target": target,
+        "override": override_after,
+        "changed": bool(target and target != current),
+        "sources": sources,
+        "config": config,
+    }
+
+
+def wake_daemon() -> None:
+    subprocess.run(
+        ["systemctl", "--user", "kill", "--signal=SIGUSR1", "mic-priority.service"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def daemon() -> None:
+    wake_read, wake_write = os.pipe()
+
+    def wake(_signum: int, _frame: Any) -> None:
+        try:
+            os.write(wake_write, b"x")
+        except OSError:
+            pass
+
+    signal.signal(signal.SIGUSR1, wake)
+    signal.signal(signal.SIGHUP, wake)
+    reconcile()
+
+    while True:
+        subscription = subprocess.Popen(
+            [PACTL, "subscribe"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+        )
+        assert subscription.stdout is not None
+        selector = selectors.DefaultSelector()
+        selector.register(subscription.stdout, selectors.EVENT_READ)
+        selector.register(wake_read, selectors.EVENT_READ)
+        try:
+            subscribed = True
+            while subscribed and subscription.poll() is None:
+                events = selector.select(timeout=30)
+                if not events:
+                    reconcile()
+                for key, _mask in events:
+                    if key.fileobj == wake_read:
+                        os.read(wake_read, 4096)
+                    else:
+                        line = subscription.stdout.readline()
+                        if not line:
+                            subscribed = False
+                            break
+                        # Source/card/server changes can affect availability or defaults.
+                        if any(word in line for word in ("source", "card", "server")):
+                            reconcile()
+        finally:
+            selector.close()
+            subscription.terminate()
+            subscription.wait(timeout=5)
+
+
+def print_status() -> None:
+    state = reconcile(dry_run=True)
+    override = state["override"] or "none"
+    print(f"Default:   {state['current'] or 'none'}")
+    print(f"Selected:  {state['target'] or 'none'}")
+    print(f"Override:  {override}")
+    print()
+    disabled = set(state["config"]["disabled"])
+    rank = 0
+    for name in state["config"]["order"]:
+        source = state["sources"].get(name)
+        label = state["config"]["labels"].get(name, name)
+        connection = "connected" if source and source.connected else "disconnected"
+        if name in disabled:
+            enabled = "disabled"
+        else:
+            rank += 1
+            enabled = f"priority {rank}"
+        print(f"{label}: {connection}, {enabled}")
+
+
+def tui() -> None:
+    try:
+        from rich.text import Text
+        from textual.app import App, ComposeResult
+        from textual.containers import Container
+        from textual.widgets import Footer, Header, Static
+    except ImportError:
+        print("The Textual package is required for the microphone TUI.", file=sys.stderr)
+        raise SystemExit(1)
+
+    class MicrophoneApp(App[None]):
+        TITLE = "Microphone Priority"
+        SUB_TITLE = "PipeWire input manager"
+        CSS = """
+        Screen { background: #10141c; color: #d8dee9; }
+        Header { background: #5e81ac; color: white; }
+        #body { height: 1fr; margin: 1 2; border: round #4c566a; padding: 1 2; }
+        #summary { height: 4; color: #88c0d0; margin-bottom: 1; }
+        #devices { height: 1fr; }
+        #help { height: 3; color: #81a1c1; border-top: solid #3b4252; padding-top: 1; }
+        Footer { background: #2e3440; }
+        """
+        BINDINGS = [
+            ("q", "quit", "Quit"),
+            ("up", "previous", "Select up"),
+            ("down", "next", "Select down"),
+            ("shift+up", "promote", "Raise priority"),
+            ("shift+down", "demote", "Lower priority"),
+            ("space", "override", "Use temporarily"),
+            ("d", "toggle_disabled", "Enable/disable"),
+            ("c", "clear_override", "Resume hierarchy"),
+            ("r", "refresh", "Refresh"),
+        ]
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.selected = 0
+            self.state: dict[str, Any] = {}
+
+        def compose(self) -> ComposeResult:
+            yield Header()
+            with Container(id="body"):
+                yield Static(id="summary")
+                yield Static(id="devices")
+                yield Static(
+                    "↑↓ select   Shift+↑↓ rank   Space override   D disable   "
+                    "C automatic   Q quit",
+                    id="help",
+                )
+            yield Footer()
+
+        def on_mount(self) -> None:
+            self.refresh_state()
+            self.set_interval(2.0, self.refresh_state)
+
+        @property
+        def order(self) -> list[str]:
+            return self.state.get("config", {}).get("order", [])
+
+        def refresh_state(self) -> None:
+            try:
+                self.state = reconcile(dry_run=True)
+            except (subprocess.SubprocessError, json.JSONDecodeError) as error:
+                self.notify(str(error), title="Could not read microphones", severity="error")
+                return
+            self.selected = max(0, min(self.selected, len(self.order) - 1))
+            self.render_state()
+
+        def render_state(self) -> None:
+            current = self.state.get("current")
+            target = self.state.get("target")
+            override = self.state.get("override")
+            config = self.state["config"]
+            sources: dict[str, Source] = self.state["sources"]
+            labels: dict[str, str] = config["labels"]
+            disabled = set(config["disabled"])
+            priority_names = [name for name in self.order if name not in disabled]
+            priorities = {name: rank for rank, name in enumerate(priority_names, start=1)}
+
+            mode = "TEMPORARY OVERRIDE" if override else "AUTOMATIC HIERARCHY"
+            active_label = labels.get(target, target or "No usable microphone")
+            summary = Text()
+            summary.append(f"  {mode}\n", style="bold #ebcb8b" if override else "bold #a3be8c")
+            summary.append("  Active: ", style="dim")
+            summary.append(active_label, style="bold #88c0d0")
+            self.query_one("#summary", Static).update(summary)
+
+            content = Text()
+            if not self.order:
+                content.append("No microphones have been discovered yet.", style="italic #d08770")
+            for index, name in enumerate(self.order):
+                source = sources.get(name)
+                label = labels.get(name, name)
+                connected = bool(source and source.connected)
+                is_monitor = bool(source and source.monitor)
+                pointer = "❯" if index == self.selected else " "
+                rank = f"{priorities[name]:>2}" if name in priorities else " —"
+                status = "● connected" if connected else "○ unplugged"
+                status_style = "#a3be8c" if connected else "#616e88"
+                flags = []
+                if name == current:
+                    flags.append("DEFAULT")
+                if name == override:
+                    flags.append("OVERRIDE")
+                if name in disabled:
+                    flags.append("DISABLED")
+                if is_monitor:
+                    flags.append("LOOPBACK")
+                line_style = "reverse" if index == self.selected else ""
+                content.append(f"{pointer} {rank}  ", style=line_style)
+                content.append(f"{label:<32.32}", style=f"bold {line_style}")
+                content.append(f" {status:<14}", style=f"{status_style} {line_style}")
+                if flags:
+                    content.append("  " + " · ".join(flags), style=f"bold #ebcb8b {line_style}")
+                content.append("\n")
+            self.query_one("#devices", Static).update(content)
+
+        def selected_name(self) -> str | None:
+            return self.order[self.selected] if self.order else None
+
+        def persist(self) -> None:
+            save_config(self.state["config"])
+            wake_daemon()
+            reconcile()
+            self.refresh_state()
+
+        def action_previous(self) -> None:
+            if self.order:
+                self.selected = (self.selected - 1) % len(self.order)
+                self.render_state()
+
+        def action_next(self) -> None:
+            if self.order:
+                self.selected = (self.selected + 1) % len(self.order)
+                self.render_state()
+
+        def move(self, offset: int) -> None:
+            if not self.order:
+                return
+            destination = self.selected + offset
+            if destination < 0 or destination >= len(self.order):
+                return
+            self.order[self.selected], self.order[destination] = (
+                self.order[destination],
+                self.order[self.selected],
+            )
+            self.selected = destination
+            self.persist()
+
+        def action_promote(self) -> None:
+            self.move(-1)
+
+        def action_demote(self) -> None:
+            self.move(1)
+
+        def action_toggle_disabled(self) -> None:
+            name = self.selected_name()
+            if not name:
+                return
+            disabled: list[str] = self.state["config"]["disabled"]
+            if self.state["sources"].get(name, Source(name, name)).monitor:
+                self.notify("Speaker loopback sources are always disabled", severity="warning")
+                return
+            if name in disabled:
+                disabled.remove(name)
+            else:
+                disabled.append(name)
+                if load_override() == name:
+                    set_override(None)
+            self.persist()
+
+        def action_override(self) -> None:
+            name = self.selected_name()
+            source = self.state["sources"].get(name) if name else None
+            if not source or not source.connected:
+                self.notify("That microphone is not connected", severity="warning")
+                return
+            if source.monitor:
+                self.notify("Speaker loopback sources cannot be microphones", severity="warning")
+                return
+            set_override(name)
+            wake_daemon()
+            reconcile()
+            self.refresh_state()
+
+        def action_clear_override(self) -> None:
+            set_override(None)
+            wake_daemon()
+            reconcile()
+            self.refresh_state()
+
+        def action_refresh(self) -> None:
+            state = reconcile()
+            self.state = state
+            self.render_state()
+
+    MicrophoneApp().run()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="tui",
+        choices=("tui", "daemon", "status", "reconcile"),
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    if args.command == "daemon":
+        daemon()
+    elif args.command == "status":
+        print_status()
+    elif args.command == "reconcile":
+        state = reconcile(dry_run=args.dry_run)
+        print(state["target"] or "")
+    else:
+        tui()
+
+
+if __name__ == "__main__":
+    main()

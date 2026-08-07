@@ -202,6 +202,21 @@
     ];
   });
 
+  micPriorityPython = pkgs.python313.withPackages (pythonPackages: [
+    pythonPackages.textual
+  ]);
+
+  micPriority = pkgs.writeShellApplication {
+    name = "mic-priority";
+    runtimeInputs = [
+      pkgs.pulseaudio
+      pkgs.systemd
+    ];
+    text = ''
+      exec ${micPriorityPython}/bin/python3 "$HOME/.local/libexec/mic-priority.py" "$@"
+    '';
+  };
+
   talonCommunity = pkgs.fetchFromGitHub {
     owner = "talonhub";
     repo = "community";
@@ -264,6 +279,7 @@ in {
     # --- hypr window-manager ---
     waybar
     rofi
+    quickshell
     hyprsunset
 
     # For your custom scripts
@@ -285,6 +301,7 @@ in {
     pulseaudio # Provides pactl for muting per-app PipeWire playback streams
     easyeffects # PipeWire microphone/speaker effects
     swayosdOveramplified # brightness/audio graphics
+    micPriority # Automatic microphone hierarchy and interactive TUI
 
     grim # takes the picture
     slurp # Drags the captured picture
@@ -332,6 +349,11 @@ in {
     # 3. Rofi (Single File)
     ".config/rofi/config.rasi".source = makeLink "rofi/config.rasi" ../rofi/config.rasi;
 
+    ".config/quickshell/keybind-hints" = {
+      source = makeLink "quickshell/keybind-hints" ../quickshell/keybind-hints;
+      recursive = true;
+    };
+
     # 4. Mako notifications
     ".config/mako/config".source = makeLink "mako/config" ../mako/config;
 
@@ -341,6 +363,21 @@ in {
     # 5. Custom scripts
     ".local/bin/custom-keybinds" = {
       source = makeLink "scripts/custom-keybinds" ../scripts/custom-keybinds;
+      executable = true;
+    };
+
+    ".local/bin/keybind-data" = {
+      source = makeLink "scripts/keybind-data" ../scripts/keybind-data;
+      executable = true;
+    };
+
+    ".local/bin/desktop-which-key" = {
+      source = makeLink "scripts/desktop-which-key" ../scripts/desktop-which-key;
+      executable = true;
+    };
+
+    ".local/bin/web-shortcuts" = {
+      source = makeLink "scripts/web-shortcuts" ../scripts/web-shortcuts;
       executable = true;
     };
 
@@ -448,6 +485,10 @@ in {
         fi
       '';
       executable = true;
+    };
+
+    ".local/libexec/mic-priority.py" = {
+      source = makeLink "scripts/mic-priority" ../scripts/mic-priority;
     };
 
     ".local/bin/notification-popups" = {
@@ -608,6 +649,38 @@ in {
       Restart = "always";
       RestartSec = 2;
     };
+  };
+
+  systemd.user.services.mic-priority = {
+    Unit = {
+      Description = "Automatic microphone priority manager";
+      After = ["pipewire-pulse.service"];
+      Wants = ["pipewire-pulse.service"];
+    };
+
+    Service = {
+      ExecStart = "${micPriority}/bin/mic-priority daemon";
+      Restart = "always";
+      RestartSec = 2;
+    };
+
+    Install.WantedBy = ["default.target"];
+  };
+
+  systemd.user.services.keybind-hints = {
+    Unit = {
+      Description = "Desktop which-key overlay";
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+
+    Service = {
+      ExecStart = "${pkgs.quickshell}/bin/qs -n -c keybind-hints";
+      Restart = "on-failure";
+      RestartSec = 1;
+    };
+
+    Install.WantedBy = ["graphical-session.target"];
   };
 
   systemd.user.services.battery-alert = {

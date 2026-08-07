@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_dir="${XDG_RUNTIME_DIR:-/tmp}/desktop-which-key-${UID}"
+hold_token_file="$state_dir/hold-token"
+mkdir -p "$state_dir"
+
+ipc() {
+  local function="$1"
+  shift
+
+  if qs -c keybind-hints ipc call overlay "$function" "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  systemctl --user start keybind-hints.service >/dev/null 2>&1 || return 0
+  for _ in 1 2 3 4 5; do
+    sleep 0.05
+    if qs -c keybind-hints ipc call overlay "$function" "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+}
+
+case "${1:-}" in
+  toggle)
+    ipc toggleAll
+    ;;
+  show)
+    ipc show "${2:-all}"
+    ;;
+  hide)
+    ipc hide
+    ;;
+  context)
+    ipc showContext "${2:-web}"
+    ;;
+  end-context)
+    ipc hideContext
+    ;;
+  hold-start)
+    token="$(date +%s%N)"
+    printf '%s\n' "$token" > "$hold_token_file"
+    systemd-run --user --quiet --collect \
+      --unit="desktop-which-key-hold-${token}" \
+      "$0" hold-fire "$token" >/dev/null
+    ;;
+  hold-end)
+    printf 'released\n' > "$hold_token_file"
+    ipc endPeek
+    ;;
+  hold-fire)
+    token="${2:-}"
+    [[ -n "$token" ]] || exit 2
+    sleep 0.2
+    current=""
+    if [[ -r "$hold_token_file" ]]; then
+      IFS= read -r current < "$hold_token_file" || true
+    fi
+    if [[ "$current" == "$token" ]]; then
+      ipc peek
+    fi
+    ;;
+  *)
+    printf 'Usage: %s {toggle|show [mode]|hide|context [mode]|end-context|hold-start|hold-end}\n' "$0" >&2
+    exit 2
+    ;;
+esac

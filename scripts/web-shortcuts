@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+reset_submap() {
+  hyprctl dispatch submap reset >/dev/null
+  /home/hjalte/.local/bin/desktop-which-key end-context >/dev/null 2>&1 || true
+}
+
+open_url() {
+  reset_submap
+  firefox "$1" >/dev/null 2>&1 &
+}
+
+case "${1:-}" in
+  enter)
+    hyprctl dispatch submap web >/dev/null
+    /home/hjalte/.local/bin/desktop-which-key context web >/dev/null 2>&1 || true
+    ;;
+  cancel)
+    reset_submap
+    ;;
+  firefox)
+    reset_submap
+    firefox --new-window "https://google.com" >/dev/null 2>&1 &
+    ;;
+  gemini)
+    open_url "https://gemini.google.com/"
+    ;;
+  chatgpt)
+    open_url "https://chatgpt.com/"
+    ;;
+  absalon)
+    open_url "https://absalon.ku.dk/"
+    ;;
+  kunet)
+    open_url "https://kunet.ku.dk/"
+    ;;
+  email)
+    open_url "https://webmail.simply.com"
+    ;;
+  ku-email)
+    open_url "https://webmail.ku.dk"
+    ;;
+  youtube)
+    open_url "https://youtube.com/"
+    ;;
+  discord)
+    open_url "https://discord.com/channels/@me"
+    ;;
+  codeforces)
+    reset_submap
+    /home/hjalte/.local/bin/codeforces-session >/dev/null 2>&1 &
+    ;;
+  *)
+    printf 'Usage: %s {enter|cancel|firefox|gemini|chatgpt|absalon|kunet|email|ku-email|youtube|discord|codeforces}\n' "$0" >&2
+    exit 2
+    ;;
+esac

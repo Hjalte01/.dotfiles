@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+custom_keybinds="${CUSTOM_KEYBINDS:-$HOME/.local/bin/custom-keybinds}"
+if [[ ! -x "$custom_keybinds" ]]; then
+  custom_keybinds="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/custom-keybinds"
+fi
+
+"$custom_keybinds" --json | jq '
+  def lower_description: (.description | ascii_downcase);
+  def group:
+    if (.combo | contains(" → ")) then "Sequences"
+    elif (lower_description | test("workspace")) then "Workspaces"
+    elif (lower_description | test("focus |swap window|resize|fullscreen|close window|split|move window")) then "Windows & layout"
+    elif (lower_description | test("clipboard|codex")) then "Clipboard & Codex"
+    elif (lower_description | test("notification|screenshot")) then "Notifications & screenshots"
+    elif (lower_description | test("autoclick|autoscroll|cursor circle|touchscreen|talon|dictation|math ocr")) then "Accessibility & automation"
+    elif (lower_description | test("display|waybar|night light|desktop|system power|bluetooth|audio control|mute active|idle monitor|keybind manual|keybind map")) then "Display & desktop"
+    elif (.combo | test("^(XF86|Print|Alt\\+Print|F9)")) then "Hardware & media"
+    elif (lower_description | test("terminal|downloads|editor|activity|docker|zathura|website|firefox|gemini|chatgpt|absalon|kunet|email|youtube|discord|codeforces")) then "Launch & open"
+    else "Display & desktop"
+    end;
+  def scope:
+    if (.combo | contains(" → ")) then "web"
+    elif (.combo | startswith("Super+")) then "super"
+    else "global"
+    end;
+  def key:
+    if (.combo | contains(" → ")) then (.combo | split(" → ") | last)
+    else (.combo | split("+") | last)
+    end;
+  map(. + {group: group, scope: scope, key: key})
+  | sort_by(.group, .combo)
+'

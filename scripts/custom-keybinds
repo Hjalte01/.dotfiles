@@ -88,13 +88,32 @@ format_keybinds() {
       command = trim(command)
       if (key ~ /^switch:/ || command == "true") return
       if (title == "" || title == "exec") title = "Unnamed"
-      if (mods == "") {
+      if (submap_prefix != "") {
+        if (key ~ /^[a-z]$/) key = toupper(key)
+        combo = submap_prefix " → " key
+      } else if (mods == "") {
         combo = key
       } else {
         combo = mods "+" key
       }
       display = sprintf("%-22s  %s", combo, title)
-      printf "%s\t%s\t%s\n", display, command, combo
+      printf "%s\t%s\t%s\t%s\n", display, command, combo, title
+    }
+    /^[ \t]*submap[ \t]*=/ {
+      line = $0
+      prefix = ""
+      if (match(line, /#[ \t]*keybind-prefix:[ \t]*/)) {
+        prefix = trim(substr(line, RSTART + RLENGTH))
+      }
+      sub(/#.*/, "", line)
+      sub(/^[ \t]*submap[ \t]*=[ \t]*/, "", line)
+      name = trim(line)
+      if (name == "reset") {
+        submap_prefix = ""
+      } else {
+        submap_prefix = prefix
+      }
+      next
     }
     /^[ \t]*bindd[ \t]*=/ {
       line = $0
@@ -135,6 +154,28 @@ format_keybinds() {
     }
   ' "$source_file"
 }
+
+if [[ "${1:-}" == "--dump" ]]; then
+  format_keybinds
+  exit 0
+fi
+
+if [[ "${1:-}" == "--json" ]]; then
+  format_keybinds | jq -Rn '
+    [
+      inputs
+      | split("\t")
+      | select(length >= 4)
+      | {
+          display: .[0],
+          command: .[1],
+          combo: .[2],
+          description: .[3]
+        }
+    ]
+  '
+  exit 0
+fi
 
 write_added_cache_meta() {
   local repo_root="$1"

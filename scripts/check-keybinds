@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+config="$repo_root/hypr/hyprland.conf"
+details="$(mktemp)"
+trap 'rm -f "$details"' EXIT
+
+HYPRLAND_CONFIG="$config" "$repo_root/scripts/custom-keybinds" --dump > "$details"
+
+duplicates="$(cut -f3 "$details" | sort | uniq -d)"
+if [[ -n "$duplicates" ]]; then
+  printf 'Duplicate keybindings:\n%s\n' "$duplicates" >&2
+  exit 1
+fi
+
+too_many_modifiers="$(
+  cut -f3 "$details" | awk '
+    {
+      count = 0
+      if ($0 ~ /(^|\+)Super(\+| |$)/) count++
+      if ($0 ~ /(^|\+)Shift(\+| |$)/) count++
+      if ($0 ~ /(^|\+)Ctrl(\+| |$)/) count++
+      if ($0 ~ /(^|\+)Alt(\+| |$)/) count++
+      if (count > 2) print
+    }
+  '
+)"
+if [[ -n "$too_many_modifiers" ]]; then
+  printf 'Bindings with more than two modifiers:\n%s\n' "$too_many_modifiers" >&2
+  exit 1
+fi
+
+expected_sequences=10
+actual_sequences="$(cut -f3 "$details" | awk '/^Super\+G → [A-Z]$/ { count++ } END { print count + 0 }')"
+if [[ "$actual_sequences" -ne "$expected_sequences" ]]; then
+  printf 'Expected %d web sequences, found %d\n' "$expected_sequences" "$actual_sequences" >&2
+  exit 1
+fi
+
+printf 'Keybind validation passed: no duplicates, no three-modifier chords, %d web sequences.\n' "$actual_sequences"

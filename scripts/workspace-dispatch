@@ -16,6 +16,16 @@ usage() {
 
 [[ -n "$action" && -n "$workspace" ]] || usage
 
+cancel_key_hints() {
+  /home/hjalte/.local/bin/desktop-which-key hold-end >/dev/null 2>&1 || true
+}
+
+# Hyprland can drop a modifier-only release bind after another Super chord wins.
+# Cancel both before and just after the workspace action so a fast chord cannot
+# leave a delayed hold request behind, including when selecting this workspace.
+cancel_key_hints
+trap 'sleep 0.05; cancel_key_hints' EXIT
+
 active_monitor() {
   hyprctl monitors -j | jq -r '.[] | select(.focused) | .name' | head -n 1
 }
