@@ -11,16 +11,15 @@ case "$action" in
     ;;
 esac
 
-sink="$(
-  pactl list short sinks | awk '$NF == "RUNNING" { print $2; exit }'
-)"
+sink="$(output-priority volume-target)"
 
-if [[ -n "$sink" ]]; then
-  pactl set-default-sink "$sink"
+if [[ -z "$sink" ]]; then
+  echo "No usable audio output found" >&2
+  exit 1
 fi
 
 if [[ "$action" == "mute-toggle" ]]; then
-  exec swayosd-client --output-volume mute-toggle
+  exec swayosd-client --device "$sink" --output-volume mute-toggle
 fi
 
-exec swayosd-client --output-volume "$action" --max-volume 150
+exec swayosd-client --device "$sink" --output-volume "$action" --max-volume 150

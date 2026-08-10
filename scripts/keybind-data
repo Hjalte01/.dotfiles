@@ -21,7 +21,9 @@ fi
     else "Display & desktop"
     end;
   def scope:
-    if (.combo | contains(" → ")) then "web"
+    if (.combo | startswith("Super+G → ")) then "web"
+    elif (.combo | startswith("Super+A → ")) then "audio"
+    elif (.combo | contains(" → ")) then "sequence"
     elif (.combo | startswith("Super+")) then "super"
     else "global"
     end;

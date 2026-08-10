@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+reset_submap() {
+  hyprctl dispatch submap reset >/dev/null
+  /home/hjalte/.local/bin/desktop-which-key end-context >/dev/null 2>&1 || true
+}
+
+open_manager() {
+  local command="$1"
+
+  reset_submap
+  ghostty -e "$command" >/dev/null 2>&1 &
+}
+
+case "${1:-}" in
+  enter)
+    hyprctl dispatch submap audio >/dev/null
+    /home/hjalte/.local/bin/desktop-which-key context audio >/dev/null 2>&1 || true
+    ;;
+  cancel)
+    reset_submap
+    ;;
+  output)
+    open_manager output-priority
+    ;;
+  microphone)
+    open_manager mic-priority
+    ;;
+  *)
+    printf 'Usage: %s {enter|cancel|output|microphone}\n' "$0" >&2
+    exit 2
+    ;;
+esac

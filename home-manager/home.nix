@@ -217,6 +217,17 @@
     '';
   };
 
+  outputPriority = pkgs.writeShellApplication {
+    name = "output-priority";
+    runtimeInputs = [
+      pkgs.pulseaudio
+      pkgs.systemd
+    ];
+    text = ''
+      exec ${micPriorityPython}/bin/python3 "$HOME/.local/libexec/output-priority.py" "$@"
+    '';
+  };
+
   talonCommunity = pkgs.fetchFromGitHub {
     owner = "talonhub";
     repo = "community";
@@ -302,6 +313,7 @@ in {
     easyeffects # PipeWire microphone/speaker effects
     swayosdOveramplified # brightness/audio graphics
     micPriority # Automatic microphone hierarchy and interactive TUI
+    outputPriority # Automatic speaker hierarchy and interactive TUI
 
     grim # takes the picture
     slurp # Drags the captured picture
@@ -383,6 +395,11 @@ in {
 
     ".local/bin/rofi-menu" = {
       source = makeLink "scripts/rofi-menu" ../scripts/rofi-menu;
+      executable = true;
+    };
+
+    ".local/bin/audio-shortcuts" = {
+      source = makeLink "scripts/audio-shortcuts" ../scripts/audio-shortcuts;
       executable = true;
     };
 
@@ -489,6 +506,10 @@ in {
 
     ".local/libexec/mic-priority.py" = {
       source = makeLink "scripts/mic-priority" ../scripts/mic-priority;
+    };
+
+    ".local/libexec/output-priority.py" = {
+      source = makeLink "scripts/output-priority" ../scripts/output-priority;
     };
 
     ".local/bin/notification-popups" = {
@@ -660,6 +681,22 @@ in {
 
     Service = {
       ExecStart = "${micPriority}/bin/mic-priority daemon";
+      Restart = "always";
+      RestartSec = 2;
+    };
+
+    Install.WantedBy = ["default.target"];
+  };
+
+  systemd.user.services.output-priority = {
+    Unit = {
+      Description = "Automatic speaker priority manager";
+      After = ["pipewire-pulse.service"];
+      Wants = ["pipewire-pulse.service"];
+    };
+
+    Service = {
+      ExecStart = "${outputPriority}/bin/output-priority daemon";
       Restart = "always";
       RestartSec = 2;
     };

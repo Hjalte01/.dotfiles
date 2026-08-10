@@ -44,10 +44,11 @@ ShellRoot {
     ]
 
     readonly property var activeColumns: mode === "super" ? superColumns : allColumns
+    readonly property bool contextMode: mode === "web" || mode === "audio"
 
     function filteredEntries() {
-        if (mode === "web")
-            return entries.filter(entry => entry.scope === "web")
+        if (contextMode)
+            return entries.filter(entry => entry.scope === mode)
         if (mode === "super")
             return entries.filter(entry => entry.scope === "super" && entry.combo.indexOf(" → ") === -1)
         return entries
@@ -57,12 +58,12 @@ ShellRoot {
         return filteredEntries().filter(entry => entry.group === groupName)
     }
 
-    function webDestinations() {
-        return entries.filter(entry => entry.scope === "web" && keyLabel(entry) !== "Escape")
+    function contextDestinations() {
+        return entries.filter(entry => entry.scope === mode && keyLabel(entry) !== "Escape")
     }
 
     function keyLabel(entry) {
-        if (mode === "web") {
+        if (contextMode) {
             const pieces = entry.combo.split(" → ")
             return pieces.length > 1 ? pieces[pieces.length - 1] : entry.display
         }
@@ -74,6 +75,8 @@ ShellRoot {
     function titleText() {
         if (mode === "web")
             return "Web shortcuts"
+        if (mode === "audio")
+            return "Audio hierarchy"
         if (mode === "super")
             return "Super shortcuts"
         return "Desktop key map"
@@ -82,6 +85,8 @@ ShellRoot {
     function subtitleText() {
         if (mode === "web")
             return "Choose a destination"
+        if (mode === "audio")
+            return "Choose a device manager"
         if (pinned)
             return "Pinned · Esc or Super+M closes · Super+Shift+M searches"
         return "Release Super to close · Super+M pins"
@@ -348,7 +353,7 @@ ShellRoot {
             color: "transparent"
             focusable: false
             exclusionMode: ExclusionMode.Ignore
-            implicitHeight: root.mode === "web" ? 320 : Math.min(820, modelData.height * 0.78)
+            implicitHeight: root.contextMode ? 320 : Math.min(820, modelData.height * 0.78)
 
             anchors {
                 left: true
@@ -366,7 +371,7 @@ ShellRoot {
                 id: card
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                width: root.mode === "web" ? Math.min(1120, parent.width) : parent.width
+                width: root.contextMode ? Math.min(1120, parent.width) : parent.width
                 height: parent.height
                 color: root.base
                 radius: 18
@@ -411,7 +416,9 @@ ShellRoot {
                             Text {
                                 id: countText
                                 anchors.centerIn: parent
-                                text: root.mode === "web" ? "Super + G" : root.filteredEntries().length + " bindings"
+                                text: root.mode === "web" ? "Super + G"
+                                    : root.mode === "audio" ? "Super + A"
+                                    : root.filteredEntries().length + " bindings"
                                 color: root.green
                                 font.family: "JetBrainsMono Nerd Font"
                                 font.pixelSize: 11
@@ -421,7 +428,7 @@ ShellRoot {
                     }
 
                     RowLayout {
-                        visible: root.mode !== "web"
+                        visible: !root.contextMode
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.alignment: Qt.AlignLeft
@@ -438,15 +445,15 @@ ShellRoot {
                     }
 
                     GridLayout {
-                        visible: root.mode === "web"
+                        visible: root.contextMode
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        columns: 5
+                        columns: root.mode === "audio" ? 2 : 5
                         columnSpacing: 10
                         rowSpacing: 10
 
                         Repeater {
-                            model: root.webDestinations()
+                            model: root.contextDestinations()
 
                             WebTile {
                                 required property var modelData
@@ -456,7 +463,7 @@ ShellRoot {
                     }
 
                     Text {
-                        visible: root.mode === "web"
+                        visible: root.contextMode
                         Layout.alignment: Qt.AlignHCenter
                         text: "Esc  Cancel"
                         color: root.subtext
