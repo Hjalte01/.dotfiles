@@ -228,11 +228,19 @@ in {
     after = ["tailscaled.service" "network-online.target" "nginx.service"];
     wants = ["network-online.target"];
     requires = ["tailscaled.service" "nginx.service"];
+    path = [pkgs.coreutils pkgs.tailscale];
+    script = ''
+      set +e
+      timeout 15s tailscale serve --bg --yes --https=443 http://127.0.0.1:8080
+      status=$?
+      if [[ $status -eq 124 ]]; then
+        echo "Tailscale Serve is not enabled yet; the timer will retry."
+        exit 0
+      fi
+      exit "$status"
+    '';
     serviceConfig = {
       Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${lib.getExe pkgs.tailscale} serve --bg --yes --https=443 http://127.0.0.1:8080";
-      TimeoutStartSec = 15;
     };
   };
 
