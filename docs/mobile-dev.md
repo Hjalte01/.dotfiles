@@ -108,6 +108,11 @@ Tailscale Serve terminates trusted HTTPS and forwards it to Nginx on
 public firewall. Enable HTTPS certificates once in the Tailscale DNS admin page
 before the first activation.
 
+If Serve has not been enabled yet, `tailscale-serve-vps-hub.service` times out
+quickly and retries once per minute instead of blocking a system rebuild. After
+enabling it, inspect `systemctl status tailscale-serve-vps-hub` and
+`tailscale serve status` to confirm the HTTPS forwarding was applied.
+
 Application source is committed in `vps-hub`, `game_factory`, and
 `codex-queue`, then pinned by full commit revision in `pkgs/`. To deploy an
 update, push the application commit, update the corresponding pin (and npm hash

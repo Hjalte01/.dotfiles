@@ -233,6 +233,9 @@ in {
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = "${lib.getExe pkgs.tailscale} serve --bg --yes --https=443 http://127.0.0.1:8080";
+      Restart = "on-failure";
+      RestartSec = 60;
+      TimeoutStartSec = 15;
     };
   };
 
