@@ -225,7 +225,6 @@ in {
 
   systemd.services.tailscale-serve-vps-hub = {
     description = "Persist Tailscale Serve HTTPS forwarding for the VPS Hub";
-    wantedBy = ["multi-user.target"];
     after = ["tailscaled.service" "network-online.target" "nginx.service"];
     wants = ["network-online.target"];
     requires = ["tailscaled.service" "nginx.service"];
@@ -233,9 +232,18 @@ in {
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = "${lib.getExe pkgs.tailscale} serve --bg --yes --https=443 http://127.0.0.1:8080";
-      Restart = "on-failure";
-      RestartSec = 60;
       TimeoutStartSec = 15;
+    };
+  };
+
+  systemd.timers.tailscale-serve-vps-hub = {
+    description = "Retry Tailscale Serve setup for the VPS Hub";
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "30s";
+      OnUnitInactiveSec = "1min";
+      Persistent = true;
+      Unit = "tailscale-serve-vps-hub.service";
     };
   };
 
