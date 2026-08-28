@@ -1,6 +1,5 @@
 {
   lib,
-  fetchgit,
   python3Packages,
 }:
 python3Packages.buildPythonApplication {
@@ -10,10 +9,9 @@ python3Packages.buildPythonApplication {
 
   # The application is a standalone local repository. Keep this pin explicit so
   # mobile-dev rebuilds use reviewed, committed source rather than a dirty tree.
-  src = fetchgit {
+  src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/codex-queue";
-    rev = "b19f5b0c89bc1426bdd684435b5b8b1ac4b9203a";
-    hash = "sha256-n/w3xY9YGRzYK1YXnLJEgIlBIM3tEtR1pqltCRG1FN4=";
+    rev = "aef008d4c1a9918d50e327dae7a6d414f5620824";
   };
 
   build-system = [python3Packages.setuptools];

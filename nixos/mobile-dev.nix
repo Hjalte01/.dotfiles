@@ -136,17 +136,14 @@ in {
       StateDirectoryMode = "0700";
       WorkingDirectory = "/var/lib/codex-queue";
 
-      # The agent can update Codex state and the four explicitly selected repos,
-      # while the rest of the host and home directory remain read-only.
+      # Codex Queue discovers current and future Git worktrees beneath the home
+      # directory. Codex's workspace sandbox still restricts each run to the
+      # repository selected for that task.
       ProtectSystem = "strict";
       ProtectHome = "read-only";
       ReadWritePaths = [
         "/var/lib/codex-queue"
-        "/home/hjalte/.codex"
-        "/home/hjalte/.dotfiles"
-        "-/home/hjalte/documents/decades_vintage_dk"
-        "-/home/hjalte/documents/game_factory"
-        "-/home/hjalte/documents/hjalte-og-simon-lav-cp"
+        "/home/hjalte"
       ];
       PrivateTmp = true;
       PrivateDevices = true;
