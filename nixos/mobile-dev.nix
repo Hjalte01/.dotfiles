@@ -7,6 +7,8 @@
 }: let
   codex = pkgs.callPackage ../pkgs/codex-cli.nix {};
   codexQueue = pkgs.callPackage ../pkgs/codex-queue.nix {};
+  gameFactoryGallery = pkgs.callPackage ../pkgs/game-factory-gallery.nix {};
+  vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
 in {
   imports = [
     "${modulesPath}/profiles/qemu-guest.nix"
@@ -87,10 +89,63 @@ in {
   services.tailscale.enable = true;
   services.cron.enable = true;
 
+  services.nginx = {
+    enable = true;
+    recommendedGzipSettings = true;
+    recommendedOptimisation = true;
+    recommendedProxySettings = true;
+    recommendedTlsSettings = true;
+    appendHttpConfig = ''
+      map $http_x_forwarded_proto $vps_hub_forwarded_proto {
+        default $http_x_forwarded_proto;
+        "" $scheme;
+      }
+    '';
+    virtualHosts."vps-hub" = {
+      default = true;
+      listen = [
+        {
+          addr = "127.0.0.1";
+          port = 8080;
+        }
+      ];
+      locations = {
+        "= /healthz" = {
+          return = "200 '{\"status\":\"ok\"}'";
+          extraConfig = ''
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+          '';
+        };
+        "= /codex".return = "308 /codex/";
+        "/codex/" = {
+          proxyPass = "http://127.0.0.1:8787/";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
+            proxy_set_header X-Forwarded-Prefix /codex;
+          '';
+        };
+        "= /games".return = "308 /games/";
+        "/games/" = {
+          alias = "${gameFactoryGallery}/share/game-factory-gallery/";
+          extraConfig = ''
+            index index.html;
+          '';
+        };
+        "/" = {
+          root = "${vpsHub}/share/vps-hub";
+          tryFiles = "$uri $uri/ =404";
+        };
+      };
+    };
+  };
+
   networking.firewall = {
     enable = true;
-    # Codex Queue listens on 8787, but tailscale0 is the only trusted interface.
-    # Deliberately keep 8787 out of the public port allowlist.
+    # Nginx and Codex Queue bind to loopback. Tailscale Serve is the only HTTPS
+    # entry point, and no web port is opened on the VPS's public interface.
     trustedInterfaces = ["tailscale0"];
     allowedTCPPorts = [22];
   };
@@ -119,8 +174,9 @@ in {
     environment = {
       CODEX_HOME = "/home/hjalte/.codex";
       CODEX_QUEUE_CODEX = lib.getExe' codex "codex";
-      CODEX_QUEUE_HOST = "0.0.0.0";
+      CODEX_QUEUE_HOST = "127.0.0.1";
       CODEX_QUEUE_PORT = "8787";
+      CODEX_QUEUE_SESSION_COOKIE_SECURE = "true";
       CODEX_QUEUE_STATE_DIR = "/var/lib/codex-queue";
       HOME = "/home/hjalte";
     };
@@ -167,6 +223,19 @@ in {
     };
   };
 
+  systemd.services.tailscale-serve-vps-hub = {
+    description = "Persist Tailscale Serve HTTPS forwarding for the VPS Hub";
+    wantedBy = ["multi-user.target"];
+    after = ["tailscaled.service" "network-online.target" "nginx.service"];
+    wants = ["network-online.target"];
+    requires = ["tailscaled.service" "nginx.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${lib.getExe pkgs.tailscale} serve --bg --yes --https=443 http://127.0.0.1:8080";
+    };
+  };
+
   environment.systemPackages = with pkgs; [
     cacert
     git
@@ -174,6 +243,8 @@ in {
     tailscale
     vim
     codexQueue
+    gameFactoryGallery
+    vpsHub
   ];
 
   system.stateVersion = "25.11";
