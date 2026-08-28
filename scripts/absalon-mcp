@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+keys_file="${ABSALON_KEYS_FILE:-$HOME/.api_keys.json}"
+
+if [ ! -r "$keys_file" ]; then
+  printf 'Absalon MCP: cannot read key file: %s\n' "$keys_file" >&2
+  exit 1
+fi
+
+canvas_api_token="$(
+  jq -er '.absalon.api_key | select(type == "string" and length > 0)' "$keys_file"
+)" || {
+  printf 'Absalon MCP: add a non-empty .absalon.api_key to %s\n' "$keys_file" >&2
+  exit 1
+}
+
+canvas_base_url="$(
+  jq -er '.absalon.base_url // "https://absalon.instructure.com" | select(type == "string" and length > 0)' "$keys_file"
+)" || {
+  printf 'Absalon MCP: .absalon.base_url in %s must be a non-empty string\n' "$keys_file" >&2
+  exit 1
+}
+
+export CANVAS_API_TOKEN="$canvas_api_token"
+export CANVAS_BASE_URL="$canvas_base_url"
+
+exec @canvas-lms-mcp@/bin/canvas-lms-mcp

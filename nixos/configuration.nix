@@ -439,12 +439,12 @@ in {
   # Discord bot timer
   services.cron.enable = true;
 
-  # Open ports in the firewall.
-  networking.firewall.allowedTCPPorts = [5900];
-  networking.firewall.trustedInterfaces = ["tailscale0"];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-  # Or disable the firewall altogether.
-  # networking.firewall.enable = false;
+  # Use NixOS's declarative firewall (the native UFW equivalent).
+  networking.firewall = {
+    enable = true;
+    allowedTCPPorts = [ 5900 5173 5174 ];
+    trustedInterfaces = ["tailscale0"];
+  };
 
   # This value determines the NixOS release from which the default
   # settings for stateful data, like file locations and database versions

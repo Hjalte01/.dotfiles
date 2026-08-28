@@ -5,11 +5,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1784134436,
-        "narHash": "sha256-RiYd3eK30vHDLmxLzZ0OkBwzPgZpkibM5JRyzaIxJic=",
+        "lastModified": 1784141011,
+        "narHash": "sha256-InxOA1gp9PXJn0RYKPtW3LcOqaz/+mySgTuumRjo8v8=",
         "owner": "simonwinther",
         "repo": "breakd",
-        "rev": "e9e27655e803d79cece8160d29904fa68368b084",
+        "rev": "e912976591fe1e221676dfe2eba65ade82533ee2",
         "type": "github"
       },
       "original": {

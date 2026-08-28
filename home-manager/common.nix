@@ -5,6 +5,7 @@
   ...
 }: let
   codex = pkgs.callPackage ../pkgs/codex-cli.nix {};
+  canvas-lms-mcp = pkgs.callPackage ../pkgs/canvas-lms-mcp.nix {};
   hostName = osConfig.networking.hostName or "unknown";
   hostContext =
     if hostName == "mobile-dev"
@@ -41,6 +42,7 @@ in {
     alejandra
     btop
     bubblewrap
+    canvas-lms-mcp
     codex
     cppman
     curl
@@ -117,6 +119,13 @@ in {
 
     ".local/bin/update-codex" = {
       source = ../scripts/update-codex;
+      executable = true;
+    };
+
+    ".local/bin/absalon-mcp" = {
+      source = pkgs.replaceVars ../scripts/absalon-mcp {
+        inherit canvas-lms-mcp;
+      };
       executable = true;
     };
 
