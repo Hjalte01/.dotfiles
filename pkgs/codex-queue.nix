@@ -12,8 +12,8 @@ python3Packages.buildPythonApplication {
   # mobile-dev rebuilds use reviewed, committed source rather than a dirty tree.
   src = fetchgit {
     url = "file:///home/hjalte/documents/codex-queue";
-    rev = "f68cc8723cb78fd02e069fcbdea24ac42eb10729";
-    hash = "sha256-u8Eu1XXHB6v9JaBBjcz6KH7dudW5UtHoT3rFTsJnyn4=";
+    rev = "b19f5b0c89bc1426bdd684435b5b8b1ac4b9203a";
+    hash = "sha256-n/w3xY9YGRzYK1YXnLJEgIlBIM3tEtR1pqltCRG1FN4=";
   };
 
   build-system = [python3Packages.setuptools];
