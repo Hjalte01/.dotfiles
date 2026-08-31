@@ -99,6 +99,28 @@ The server shell auto-attaches to `tmux new-session -A -s main` for SSH sessions
 
 Docker is enabled for both NixOS hosts through the shared module in `flake.nix`, and `hjalte` is a member of the `docker` group so Docker commands do not require `sudo`.
 
+## Private web hub
+
+The tailnet-only landing page is `https://mobile-dev.tail55f864.ts.net/`.
+Tailscale Serve terminates trusted HTTPS and forwards it to Nginx on
+`127.0.0.1:8080`; Nginx serves the static hub and Game Factory build and proxies
+`/codex/` to Codex Queue on `127.0.0.1:8787`. Only SSH is allowed through the
+public firewall. Enable HTTPS certificates once in the Tailscale DNS admin page
+before the first activation.
+
+If Serve has not been enabled yet, `tailscale-serve-vps-hub.service` times out
+quickly and its systemd timer retries once per minute without blocking a system
+rebuild. After enabling it, inspect `systemctl status
+tailscale-serve-vps-hub` and `tailscale serve status` to confirm the HTTPS
+forwarding was applied.
+
+Application source is committed in `vps-hub`, `game_factory`, and
+`codex-queue`, then pinned by full commit revision in `pkgs/`. To deploy an
+update, push the application commit, update the corresponding pin (and npm hash
+when Game Factory dependencies change), run a full flake build, and use `nxb`.
+The hub repository documents the coordinated manifest, package/service, proxy,
+and health-route steps for adding, disabling, or removing a hosted site.
+
 The shared `c` and `cmdc` helpers use Wayland clipboard locally when available, otherwise OSC52 escape sequences. OSC52 is enabled through tmux with `set-clipboard` and `allow-passthrough`, so remote copies may reach the local terminal clipboard if the phone SSH client supports OSC52.
 
 ## Git On VPS
