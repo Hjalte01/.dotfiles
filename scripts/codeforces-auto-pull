@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-PROJECT_ROOT = Path.home() / "Documents/side_projects/codeforces"
+PROJECT_ROOT = Path.home() / "Documents/other/side_projects/codeforces"
 FIREFOX_PROFILE = Path.home() / ".mozilla/firefox/idle-games"
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "codeforces-auto-pull"
 STATE_FILE = STATE_DIR / "seen.json"

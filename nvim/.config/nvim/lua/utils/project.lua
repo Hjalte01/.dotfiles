@@ -1,6 +1,6 @@
 local M = {}
 
-local codeforces_root = "/home/hjalte/Documents/side_projects/codeforces"
+local codeforces_root = "/home/hjalte/Documents/other/side_projects/codeforces"
 
 local function normalize(path)
   return vim.fn.fnamemodify(path, ":p"):gsub("/$", "")
