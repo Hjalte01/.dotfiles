@@ -12,6 +12,7 @@
 in {
   imports = [
     "${modulesPath}/profiles/qemu-guest.nix"
+    ./obsidian-webdav.nix
   ];
 
   nix.settings.experimental-features = ["nix-command" "flakes"];
@@ -132,6 +133,19 @@ in {
           alias = "${gameFactoryGallery}/share/game-factory-gallery/";
           extraConfig = ''
             index index.html;
+          '';
+        };
+        "= /obsidian".return = "308 /obsidian/";
+        "/obsidian/" = {
+          proxyPass = "http://127.0.0.1:8686";
+          extraConfig = ''
+            # Vaults may contain large PDFs and images. Stream both directions
+            # instead of buffering entire WebDAV requests on the proxy.
+            client_max_body_size 0;
+            proxy_request_buffering off;
+            proxy_buffering off;
+            proxy_read_timeout 1h;
+            proxy_send_timeout 1h;
           '';
         };
         "/" = {
