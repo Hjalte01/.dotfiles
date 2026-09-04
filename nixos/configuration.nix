@@ -81,6 +81,10 @@ in {
 
   # Enable networking
   networking.networkmanager.enable = true;
+  networking.networkmanager.plugins = [
+    pkgs.networkmanager-openconnect
+  ];
+  programs.nm-applet.enable = true;
   services.tailscale.enable = true;
   services.breakd.enable = true;
 

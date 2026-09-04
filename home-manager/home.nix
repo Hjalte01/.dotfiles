@@ -298,6 +298,7 @@ in {
 
     # For your app keybinds
     nautilus # Your preferred file manager
+    obsidian # Markdown notes and knowledge base
     spotify # Your music player
     lazydocker # Your docker manager
     wlr-randr # Useful for manual display checks
