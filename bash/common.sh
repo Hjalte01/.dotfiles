@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared interactive Bash configuration for desktop and mobile-dev hosts.
 
 HISTCONTROL=ignoreboth
@@ -14,7 +15,11 @@ export MANPAGER='nvim +Man!'
 export PATH="$HOME/.local/bin:$PATH"
 
 if [ -x /usr/bin/dircolors ]; then
-  test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+  if [ -r ~/.dircolors ]; then
+    eval "$(dircolors -b ~/.dircolors)"
+  else
+    eval "$(dircolors -b)"
+  fi
   alias ls='ls --color=auto'
   alias grep='grep --color=auto'
   alias fgrep='fgrep --color=auto'
@@ -29,10 +34,44 @@ alias python='python3'
 alias dots='cd ~/.dotfiles'
 alias cd.='cd ~/.dotfiles'
 alias brc='nvim ~/.dotfiles/bash/common.sh ~/.dotfiles/bash/desktop.sh ~/.dotfiles/bash/mobile-dev.sh'
-alias home='nvim ~/.dotfiles/home-manager/home.nix'
 alias flake='nvim ~/.dotfiles/flake.nix'
 alias cx='codex'
 alias ta='tmux new-session -A -s main'
+
+nxb() {
+  nh os switch "$HOME/.dotfiles#${DOTFILES_FLAKE_TARGET:?DOTFILES_FLAKE_TARGET is not set}"
+}
+
+conf() {
+  nvim "${DOTFILES_NIXOS_CONFIG:?DOTFILES_NIXOS_CONFIG is not set}"
+}
+
+home() {
+  nvim "${DOTFILES_HOME_MANAGER_CONFIG:?DOTFILES_HOME_MANAGER_CONFIG is not set}"
+}
+
+function brc. {
+  # shellcheck source=/dev/null
+  source "$HOME/.bash_common.sh"
+
+  case "${DOTFILES_FLAKE_TARGET:-}" in
+    mobile-dev)
+      if [ -f "$HOME/.bash_mobile_dev.sh" ]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.bash_mobile_dev.sh"
+      fi
+      ;;
+    *)
+      if [ -f "$HOME/.bash_desktop.sh" ]; then
+        # shellcheck source=/dev/null
+        source "$HOME/.bash_desktop.sh"
+      fi
+      ;;
+  esac
+}
+
+alias nvimconf='nvim ~/.dotfiles/nvim/.config/nvim/lua/plugins/code-companion.lua.bak'
+alias nvimkeyb='nvim ~/.dotfiles/nvim/.config/nvim/lua/config/keymaps.lua'
 
 # Default interactive Codex sessions to unrestricted mode. Pass --no-yolo to
 # bypass this wrapper default and use the permissions configured by Codex.
@@ -95,7 +134,9 @@ gsyntax() {
 
 alias_str=".."
 cmd_str="cd .."
-for i in $(seq 1 10); do
+for _ in {1..10}; do
+  # These aliases intentionally capture the progressively built command.
+  # shellcheck disable=SC2139
   alias "${alias_str}=$cmd_str"
   alias_str="$alias_str."
   cmd_str="$cmd_str/.."
@@ -103,23 +144,59 @@ done
 unset alias_str cmd_str
 
 osc52_copy() {
-  local encoded
+  local encoded sequence terminator
   encoded="$(base64 | tr -d '\n')" || return 1
 
   if [ -n "${TMUX:-}" ]; then
-    printf '\033Ptmux;\033\033]52;c;%s\a\033\\' "$encoded"
+    sequence=$'\033Ptmux;\033\033]52;c;'
+    terminator=$'\a\033\\'
   else
-    printf '\033]52;c;%s\a' "$encoded"
+    sequence=$'\033]52;c;'
+    terminator=$'\a'
   fi
+
+  # Clipboard helpers often silence their standard output. Send the escape
+  # sequence straight to the terminal when possible so OSC52 still arrives.
+  if { printf '%s%s%s' "$sequence" "$encoded" "$terminator" >/dev/tty; } 2>/dev/null; then
+    return 0
+  fi
+
+  printf '%s%s%s' "$sequence" "$encoded" "$terminator"
 }
 
 copy_stdin() {
-  if command -v wl-copy >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
-    wl-copy "$@"
+  local tmp tmux_status=0 osc52_status=0
+
+  if [ -n "${TMUX:-}" ] && { [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ]; }; then
+    tmp="$(mktemp)" || return 1
+    command cat >"$tmp"
+    tmux load-buffer - <"$tmp" || tmux_status=$?
+    osc52_copy <"$tmp" || osc52_status=$?
+    command rm -f -- "$tmp"
+    [ "$tmux_status" -eq 0 ] && [ "$osc52_status" -eq 0 ]
+  elif command -v wl-copy >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    wl-copy
   else
     osc52_copy
   fi
 }
+
+paste_stdout() {
+  if [ -n "${TMUX:-}" ] && { [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ]; }; then
+    tmux save-buffer - 2>/dev/null || {
+      printf 'The tmux paste buffer is empty.\n' >&2
+      return 1
+    }
+  elif command -v wl-paste >/dev/null 2>&1 && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    wl-paste
+  else
+    printf 'Paste is unavailable: use Wayland or a remote tmux session.\n' >&2
+    return 1
+  fi
+}
+
+alias p='paste_stdout'
+alias v='paste_stdout'
 
 unalias c 2>/dev/null || true
 c() {
@@ -128,6 +205,43 @@ c() {
   else
     tee >(copy_stdin >/dev/null)
   fi
+}
+
+history_pick() {
+  local selected
+  selected="$(builtin history | tac | fzf --bind 'ctrl-y:accept')" || return
+  printf '%s\n' "$selected" | awk '{$1=""; sub(/^ /, ""); print}'
+}
+
+history() {
+  local selected
+  selected="$(history_pick)" || return
+  printf '%s' "$selected" | copy_stdin >/dev/null 2>&1 || true
+  printf '%s\n' "$selected"
+}
+
+history_insert() {
+  local selected
+  selected="$(history_pick)" || return
+  printf '%s' "$selected" | copy_stdin >/dev/null 2>&1 || true
+  READLINE_LINE="$selected"
+  READLINE_POINT="${#READLINE_LINE}"
+}
+
+bind -x '"\C-h": history_insert'
+
+sharecode() {
+  local -a statuses
+  repomix --stdout | copy_stdin
+  statuses=("${PIPESTATUS[@]}")
+  [ "${statuses[0]}" -eq 0 ] && [ "${statuses[1]}" -eq 0 ]
+}
+
+sharetree() {
+  local -a statuses
+  tree -a -I '.git|.nix-profile' | copy_stdin
+  statuses=("${PIPESTATUS[@]}")
+  [ "${statuses[0]}" -eq 0 ] && [ "${statuses[1]}" -eq 0 ]
 }
 
 cmdc() {
@@ -181,7 +295,7 @@ cdd() {
   dir=$(eval "$find_cmd" | fzf --preview 'tree -a -L 1 {}' --preview-window=right:50%) || return
 
   if [ -n "$dir" ]; then
-    cd "$dir"
+    cd "$dir" || return
   fi
 }
 

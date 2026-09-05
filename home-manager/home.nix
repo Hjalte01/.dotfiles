@@ -279,7 +279,6 @@ in {
     (pkgs.callPackage ../pkgs/talon.nix {})
 
     ghostty # Terminal
-    tree-sitter # Nvim needs it
     python311
     pix2tex # Math OCR without runtime pip installs
     xdg-utils # Provides xdg-open for the open alias

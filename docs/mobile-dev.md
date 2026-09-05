@@ -13,9 +13,9 @@ The Home Manager setup is split by role:
 
 The Bash setup is split the same way:
 
-- `bash/common.sh`: shared aliases/functions such as `..`, `cd.`, `cmdc`, `c`, `cx`, `ta`, and `cdd`.
-- `bash/desktop.sh`: desktop-only clipboard, project, media, and desktop rebuild helpers.
-- `bash/mobile-dev.sh`: VPS-only terminal normalization, tmux auto-attach, and mobile-dev rebuild helper.
+- `bash/common.sh`: shared aliases/functions for Codex, rebuilds, editors, history, tmux, and portable clipboard workflows.
+- `bash/desktop.sh`: desktop-only GUI, hardware, network, media, and legacy rebuild helpers.
+- `bash/mobile-dev.sh`: VPS-only terminal normalization and tmux auto-attach.
 - `bash/.mybashrc.sh`: compatibility loader for older habits.
 
 The intended workflow is:
@@ -89,13 +89,19 @@ pkg install openssh
 ssh hjalte@mobile-dev
 ```
 
-The server shell auto-attaches to `tmux new-session -A -s main` for SSH sessions. Useful short aliases on the VPS:
+The server shell auto-attaches to `tmux new-session -A -s main` for SSH sessions. The main workflow commands are shared by both hosts:
 
 - `ta`: attach/create the main tmux session.
-- `cx`: run `codex`.
+- `codex` / `cx`: run Codex with `--yolo` by default; pass `--no-yolo` to use the configured permissions instead.
 - `dots`: go to `~/.dotfiles`.
 - `cd.`: go to `~/.dotfiles`.
-- `nxb`: rebuild the VPS with `sudo nixos-rebuild switch --flake ~/.dotfiles#mobile-dev`.
+- `nxb`: rebuild the active host (`nixos` or `mobile-dev`) with `nh`.
+- `conf` / `home`: edit the active host's NixOS or Home Manager module.
+- `brc.`: reload the shared Bash configuration and the active host's Bash file.
+- `nvimconf` / `nvimkeyb`: edit the shared Neovim configuration or keymaps.
+- `history` (or Ctrl-H): select shell history with `fzf` and copy the selection.
+- `sharecode` / `sharetree`: copy a Repomix snapshot or repository tree without creating an output file.
+- `p` / `v`: print the Wayland clipboard locally or the tmux paste buffer over remote SSH.
 
 Docker is enabled for both NixOS hosts through the shared module in `flake.nix`, and `hjalte` is a member of the `docker` group so Docker commands do not require `sudo`.
 
@@ -121,7 +127,7 @@ when Game Factory dependencies change), run a full flake build, and use `nxb`.
 The hub repository documents the coordinated manifest, package/service, proxy,
 and health-route steps for adding, disabling, or removing a hosted site.
 
-The shared `c` and `cmdc` helpers use Wayland clipboard locally when available, otherwise OSC52 escape sequences. OSC52 is enabled through tmux with `set-clipboard` and `allow-passthrough`, so remote copies may reach the local terminal clipboard if the phone SSH client supports OSC52.
+The shared `c`, `cmdc`, `sharecode`, `sharetree`, and history helpers use the Wayland clipboard locally. In a remote tmux session they update both tmux's paste buffer and the client clipboard through OSC52; OSC52 client support depends on the phone's SSH app. Consequently, remote `p` and `v` print tmux's buffer rather than attempting to read the phone OS clipboard. Outside Wayland and remote tmux, copying still emits OSC52, while paste reports that the environment is unsupported.
 
 ## Git On VPS
 

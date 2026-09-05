@@ -1,18 +1,13 @@
+# shellcheck shell=bash
 # Desktop-only Bash configuration.
 
 export BROWSER=firefox
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
 alias open='xdg-open'
-alias p='wl-paste'
-alias v='wl-paste'
 alias vps='ssh vps'
 
-alias hypr="nvim $HOME/.dotfiles/hypr/hyprland.conf"
-alias brc.=". $HOME/.bash_common.sh; . $HOME/.bash_desktop.sh"
-alias conf="nvim $HOME/.dotfiles/nixos/configuration.nix"
-alias nvimconf="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/plugins/code-companion.lua.bak"
-alias nvimkeyb="nvim $HOME/.dotfiles/nvim/.config/nvim/lua/config/keymaps.lua"
+alias hypr='nvim ~/.dotfiles/hypr/hyprland.conf'
 
 alias oo="nmcli radio wifi off && sleep 1 && nmcli radio wifi on"
 alias touchdraw="touchscreen-toggle temp"
@@ -23,40 +18,8 @@ eduroam() {
   nmcli connection up uuid 0701ab50-f4c4-41c3-b596-a220c4e3ffe5 --ask
 }
 
-history_pick() {
-  local selected
-  selected="$(
-    builtin history |
-      tac |
-      fzf --bind 'ctrl-y:execute-silent(echo {+} | awk '\''{$1=""; sub(/^ /, ""); print}'\'' | wl-copy)+abort'
-  )" || return
-
-  printf '%s\n' "$selected" | awk '{$1=""; sub(/^ /, ""); print}'
-}
-
-history() {
-  local selected
-  selected="$(history_pick)" || return
-  printf '%s' "$selected" | wl-copy >/dev/null 2>&1 || true
-  printf '%s\n' "$selected"
-}
-
-history_insert() {
-  local selected
-  selected="$(history_pick)" || return
-  printf '%s' "$selected" | wl-copy >/dev/null 2>&1 || true
-  READLINE_LINE="$selected"
-  READLINE_POINT="${#READLINE_LINE}"
-}
-
-bind -x '"\C-h": history_insert'
-
 nxb_old() {
   sudo nixos-rebuild switch --flake ~/.dotfiles/#nixos
-}
-
-nxb() {
-  nh os switch ~/.dotfiles#nixos
 }
 
 _hendrix_pid_file=/run/openconnect-hendrix.pid
@@ -174,9 +137,6 @@ hendrix() {
       ;;
   esac
 }
-
-alias sharecode="npx repomix --copy && rm repomix-output.* 2>/dev/null"
-alias sharetree="tree -a -I '.git|.nix-profile' | wl-copy"
 
 ca() {
   local new_text current_clip

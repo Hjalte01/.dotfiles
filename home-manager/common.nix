@@ -7,6 +7,18 @@
   codex = pkgs.callPackage ../pkgs/codex-cli.nix {};
   canvas-lms-mcp = pkgs.callPackage ../pkgs/canvas-lms-mcp.nix {};
   hostName = osConfig.networking.hostName or "unknown";
+  flakeTarget =
+    if hostName == "mobile-dev"
+    then "mobile-dev"
+    else "nixos";
+  nixosConfig =
+    if hostName == "mobile-dev"
+    then "nixos/mobile-dev.nix"
+    else "nixos/configuration.nix";
+  homeManagerConfig =
+    if hostName == "mobile-dev"
+    then "home-manager/mobile-dev.nix"
+    else "home-manager/home.nix";
   hostContext =
     if hostName == "mobile-dev"
     then ''
@@ -36,6 +48,9 @@ in {
     VISUAL = "nvim";
     MANPAGER = "nvim +Man!";
     NPM_CONFIG_PREFIX = "${config.home.homeDirectory}/.local";
+    DOTFILES_FLAKE_TARGET = flakeTarget;
+    DOTFILES_NIXOS_CONFIG = "${config.home.homeDirectory}/.dotfiles/${nixosConfig}";
+    DOTFILES_HOME_MANAGER_CONFIG = "${config.home.homeDirectory}/.dotfiles/${homeManagerConfig}";
   };
 
   home.packages = with pkgs; [
@@ -63,11 +78,13 @@ in {
     nixd
     nodejs_22
     ripgrep
+    repomix
     shellcheck
     shfmt
     sqlite
     tmux
     tree
+    tree-sitter # Nvim needs it
     unzip
     usbutils
     wget
