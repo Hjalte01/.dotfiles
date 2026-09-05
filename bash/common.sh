@@ -1,6 +1,11 @@
 # shellcheck shell=bash
 # Shared interactive Bash configuration for desktop and mobile-dev hosts.
 
+if [ -r "$HOME/.bash_host_metadata.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.bash_host_metadata.sh"
+fi
+
 HISTCONTROL=ignoreboth
 shopt -s histappend
 HISTSIZE=1000
@@ -51,6 +56,11 @@ home() {
 }
 
 function brc. {
+  if [ -r "$HOME/.bash_host_metadata.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$HOME/.bash_host_metadata.sh"
+  fi
+
   # shellcheck source=/dev/null
   source "$HOME/.bash_common.sh"
 
@@ -61,16 +71,20 @@ function brc. {
         source "$HOME/.bash_mobile_dev.sh"
       fi
       ;;
-    *)
+    nixos)
       if [ -f "$HOME/.bash_desktop.sh" ]; then
         # shellcheck source=/dev/null
         source "$HOME/.bash_desktop.sh"
       fi
       ;;
+    *)
+      printf 'Unknown DOTFILES_FLAKE_TARGET: %s\n' "${DOTFILES_FLAKE_TARGET:-<unset>}" >&2
+      return 1
+      ;;
   esac
 }
 
-alias nvimconf='nvim ~/.dotfiles/nvim/.config/nvim/lua/plugins/code-companion.lua.bak'
+alias nvimconf='nvim ~/.dotfiles/nvim/.config/nvim/init.lua'
 alias nvimkeyb='nvim ~/.dotfiles/nvim/.config/nvim/lua/config/keymaps.lua'
 
 # Default interactive Codex sessions to unrestricted mode. Pass --no-yolo to
