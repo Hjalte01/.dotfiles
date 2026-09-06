@@ -6,12 +6,12 @@ buildNpmPackage {
 
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/thesis";
-    rev = "bb8b46a24fd9a6671e1f5635d8aa9dc97ea07d2c";
+    rev = "78a87b250986600e346525463946bda57fceee74";
   };
   sourceRoot = "source/learning_site";
 
   npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-pHwxJyzA3poxLbdWBFYSfYKZaifhnI6AWKrSIyg9Rmo=";
+  npmDepsHash = "sha256-0ADCCV1tdQ8Dktb+NLFqDlbnKN6q4pZgOFTJuLTOIi8=";
   SITE_BASE = "/thesis/";
   ASTRO_TELEMETRY_DISABLED = "1";
 
