@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "dotfiles": "/home/hjalte/.dotfiles",
+  "update_command": [
+    "bash",
+    "-ic",
+    "nxb"
+  ],
+  "apps": [
+    {
+      "name": "VPS Hub",
+      "repository": "/home/hjalte/documents/vps-hub",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/vps-hub.nix",
+      "services": [],
+      "health_urls": [
+        "http://127.0.0.1:8080/"
+      ],
+      "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
+      "note": "Static files served by nginx; no dedicated app service."
+    },
+    {
+      "name": "Codex Queue",
+      "repository": "/home/hjalte/documents/codex-queue",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/codex-queue.nix",
+      "services": [
+        "codex-queue.service"
+      ],
+      "health_urls": [
+        "http://127.0.0.1:8080/codex/"
+      ],
+      "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
+      "note": "NixOS-managed service; the separate deployment runner survives queue restarts."
+    },
+    {
+      "name": "Cookbook",
+      "repository": "/home/hjalte/documents/hjaltes-cookbook",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/cookbook.nix",
+      "services": [],
+      "health_urls": [
+        "http://127.0.0.1:8080/cookbook/"
+      ],
+      "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
+      "note": "Static files served by nginx; no dedicated app service."
+    },
+    {
+      "name": "Thesis Learning",
+      "repository": "/home/hjalte/documents/thesis",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/thesis-learning.nix",
+      "services": [],
+      "health_urls": [
+        "http://127.0.0.1:8080/thesis/"
+      ],
+      "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
+      "note": "Static files served by nginx; no dedicated app service."
+    },
+    {
+      "name": "Game Factory Gallery",
+      "repository": "/home/hjalte/documents/game_factory",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/game-factory-gallery.nix",
+      "services": [],
+      "health_urls": [
+        "http://127.0.0.1:8080/games/"
+      ],
+      "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
+      "note": "Static files served by nginx; no dedicated app service."
+    },
+    {
+      "name": "Dotfiles / mobile-dev",
+      "repository": "/home/hjalte/.dotfiles",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": null,
+      "services": [
+        "nginx.service",
+        "codex-queue.service"
+      ],
+      "health_urls": [
+        "http://127.0.0.1:8080/healthz"
+      ],
+      "refresh": "Run nxb to build and activate the committed configuration.",
+      "note": "System configuration; no source pin update needed."
+    },
+    {
+      "name": "decades_vintage_dk",
+      "repository": "/home/hjalte/documents/decades_vintage_dk",
+      "kind": "none",
+      "services": [],
+      "health_urls": [],
+      "refresh": "No local service to refresh.",
+      "note": "Not hosted on mobile-dev. Add a Nix package/route and change this entry to enable local deployment."
+    },
+    {
+      "name": "hjalte-og-simon-lav-cp",
+      "repository": "/home/hjalte/documents/hjalte-og-simon-lav-cp",
+      "kind": "none",
+      "services": [],
+      "health_urls": [],
+      "refresh": "No local service to refresh.",
+      "note": "Not hosted on mobile-dev. Add a Nix package/route and change this entry to enable local deployment."
+    }
+  ]
+}

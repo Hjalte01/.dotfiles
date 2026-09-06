@@ -9,6 +9,7 @@
   codexQueue = pkgs.callPackage ../pkgs/codex-queue.nix {};
   gameFactoryGallery = pkgs.callPackage ../pkgs/game-factory-gallery.nix {};
   thesisLearning = pkgs.callPackage ../pkgs/thesis-learning.nix {};
+  cookbook = pkgs.callPackage ../pkgs/cookbook.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
 in {
   imports = [
@@ -129,6 +130,15 @@ in {
             proxy_set_header X-Forwarded-Prefix /codex;
           '';
         };
+        "= /cookbook" = {
+          return = "308 /cookbook/";
+          extraConfig = "absolute_redirect off;";
+        };
+        "/cookbook/" = {
+          alias = "${cookbook}/share/cookbook/";
+          tryFiles = "$uri $uri/ /cookbook/index.html";
+          extraConfig = "index index.html;";
+        };
         "= /games".return = "308 /games/";
         "/games/" = {
           alias = "${gameFactoryGallery}/share/game-factory-gallery/";
@@ -204,6 +214,7 @@ in {
       CODEX_QUEUE_PORT = "8787";
       CODEX_QUEUE_SESSION_COOKIE_SECURE = "true";
       CODEX_QUEUE_STATE_DIR = "/var/lib/codex-queue";
+      CODEX_QUEUE_DEPLOYMENTS = "/etc/codex-queue/deployments.json";
       HOME = "/home/hjalte";
     };
 
@@ -246,6 +257,42 @@ in {
       SystemCallArchitectures = "native";
       LockPersonality = true;
       UMask = "0077";
+    };
+  };
+
+  environment.etc."codex-queue/deployments.json".source = ./data/queue-deployments.json;
+
+  # Run outside the queue service's sandbox/cgroup: nxb may restart the queue.
+  systemd.services.codex-queue-deploy = {
+    description = "Apply successful queue changes to live mobile-dev apps";
+    after = ["network-online.target"];
+    restartIfChanged = false;
+    stopIfChanged = false;
+    path = with pkgs; [bash coreutils git openssh nh nix systemd];
+    environment = {
+      HOME = "/home/hjalte";
+      CODEX_QUEUE_STATE_DIR = "/var/lib/codex-queue";
+      CODEX_QUEUE_DEPLOYMENTS = "/etc/codex-queue/deployments.json";
+    };
+    script = ''
+      export PATH=/run/wrappers/bin:$PATH
+      exec ${codexQueue}/bin/codex-queue-deploy
+    '';
+    serviceConfig = {
+      Type = "oneshot";
+      User = "hjalte";
+      Group = "users";
+      WorkingDirectory = "/home/hjalte/.dotfiles";
+      TimeoutStartSec = "70min";
+      UMask = "0077";
+    };
+  };
+  systemd.timers.codex-queue-deploy = {
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "15s";
+      OnUnitInactiveSec = "10s";
+      AccuracySec = "2s";
     };
   };
 
