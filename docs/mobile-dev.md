@@ -109,7 +109,8 @@ Docker is enabled for both NixOS hosts through the shared module in `flake.nix`,
 
 The tailnet-only landing page is `https://mobile-dev.tail55f864.ts.net/`.
 Tailscale Serve terminates trusted HTTPS and forwards it to Nginx on
-`127.0.0.1:8080`; Nginx serves the static hub and Game Factory build and proxies
+`127.0.0.1:8080`; Nginx serves the static hub, Game Factory build, and Thesis Learning at
+`/thesis/`, and proxies
 `/codex/` to Codex Queue on `127.0.0.1:8787`. Only SSH is allowed through the
 public firewall. Enable HTTPS certificates once in the Tailscale DNS admin page
 before the first activation.
@@ -120,12 +121,17 @@ rebuild. After enabling it, inspect `systemctl status
 tailscale-serve-vps-hub` and `tailscale serve status` to confirm the HTTPS
 forwarding was applied.
 
-Application source is committed in `vps-hub`, `game_factory`, and
-`codex-queue`, then pinned by full commit revision in `pkgs/`. To deploy an
-update, push the application commit, update the corresponding pin (and npm hash
-when Game Factory dependencies change), run a full flake build, and use `nxb`.
+Application source is committed in `vps-hub`, `game_factory`, `codex-queue`,
+and `thesis` (the `learning_site/` subdirectory), then pinned by full commit
+revision in `pkgs/`. To deploy an update, push the application commit, update
+the corresponding pin (and npm hash when Game Factory or Thesis Learning
+dependencies change), run a full flake build, and use `nxb`.
 The hub repository documents the coordinated manifest, package/service, proxy,
 and health-route steps for adding, disabling, or removing a hosted site.
+
+Thesis content updates need only a new committed revision in
+`pkgs/thesis-learning.nix` and `nxb`; its hub card stays the same. The package
+builds with `SITE_BASE=/thesis/` and uses Node.js 22 and locked npm dependencies.
 
 The shared `c`, `cmdc`, `sharecode`, `sharetree`, and history helpers use the Wayland clipboard locally. In a remote tmux session they update both tmux's paste buffer and the client clipboard through OSC52; OSC52 client support depends on the phone's SSH app. Consequently, remote `p` and `v` print tmux's buffer rather than attempting to read the phone OS clipboard. Outside Wayland and remote tmux, copying still emits OSC52, while paste reports that the environment is unsupported.
 

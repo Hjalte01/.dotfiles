@@ -8,6 +8,7 @@
   codex = pkgs.callPackage ../pkgs/codex-cli.nix {};
   codexQueue = pkgs.callPackage ../pkgs/codex-queue.nix {};
   gameFactoryGallery = pkgs.callPackage ../pkgs/game-factory-gallery.nix {};
+  thesisLearning = pkgs.callPackage ../pkgs/thesis-learning.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
 in {
   imports = [
@@ -131,6 +132,14 @@ in {
         "= /games".return = "308 /games/";
         "/games/" = {
           alias = "${gameFactoryGallery}/share/game-factory-gallery/";
+          extraConfig = ''
+            index index.html;
+          '';
+        };
+        "= /thesis".return = "308 /thesis/";
+        "/thesis/" = {
+          alias = "${thesisLearning}/share/thesis-learning/";
+          tryFiles = "$uri $uri/index.html =404";
           extraConfig = ''
             index index.html;
           '';
