@@ -136,7 +136,10 @@ in {
             index index.html;
           '';
         };
-        "= /thesis".return = "308 /thesis/";
+        "= /thesis" = {
+          return = "308 /thesis/";
+          extraConfig = "absolute_redirect off;";
+        };
         "/thesis/" = {
           alias = "${thesisLearning}/share/thesis-learning/";
           tryFiles = "$uri $uri/index.html =404";
