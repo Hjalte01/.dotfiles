@@ -2,7 +2,7 @@
   # Pin committed application source; reuse its runtime dependencies and checks.
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/codex-queue";
-    rev = "53f950e212367cfd6b138f223617b40816554891";
+    rev = "d142e97fc4b1a07e860202038442719b76d53e56";
   };
 in
   callPackage (src + "/package.nix") {inherit src;}
