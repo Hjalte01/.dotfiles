@@ -275,7 +275,7 @@ in {
     wineWow64Packages.stable
     winetricks
 
-    tor-browser
+    # tor-browser
     (pkgs.callPackage ../pkgs/talon.nix {})
 
     ghostty # Terminal
