@@ -139,6 +139,32 @@ in {
           tryFiles = "$uri $uri/ /cookbook/index.html";
           extraConfig = "index index.html;";
         };
+        "= /reels" = {
+          return = "308 /reels/";
+          extraConfig = "absolute_redirect off;";
+        };
+        "= /reels/" = {
+          alias = "/run/nginx-reels/";
+          extraConfig = ''
+            autoindex on;
+            autoindex_exact_size off;
+            autoindex_localtime on;
+            limit_except GET { deny all; }
+          '';
+        };
+        "/reels/" = {
+          alias = "/run/nginx-reels/";
+          extraConfig = ''
+            disable_symlinks on;
+            limit_except GET { deny all; }
+            add_header Content-Disposition "attachment";
+            add_header X-Content-Type-Options "nosniff" always;
+          '';
+        };
+        # Hide dotfiles and prevent browsing subdirectories of the download folder.
+        "~ ^/reels/(?:[.]|.*/)" = {
+          return = "404";
+        };
         "= /games".return = "308 /games/";
         "/games/" = {
           alias = "${gameFactoryGallery}/share/game-factory-gallery/";
@@ -177,6 +203,14 @@ in {
       };
     };
   };
+
+  # Expose only this folder inside nginx's namespace; ProtectHome stays enabled.
+  systemd.services.nginx.serviceConfig.BindReadOnlyPaths = [
+    "/home/hjalte/Music/reels:/run/nginx-reels"
+  ];
+  systemd.tmpfiles.rules = [
+    "d /home/hjalte/Music/reels 0755 hjalte users -"
+  ];
 
   networking.firewall = {
     enable = true;
