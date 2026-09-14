@@ -112,6 +112,12 @@ in {
           port = 8080;
         }
       ];
+      # Add shared navigation to HTML only; app CSP headers remain intact.
+      # The script skips nested frames so game embeds do not get extra controls.
+      extraConfig = ''
+        sub_filter '</body>' '<script defer src="/navigation.js"></script></body>';
+        sub_filter_once on;
+      '';
       locations = {
         "= /healthz" = {
           return = "200 '{\"status\":\"ok\"}'";
@@ -128,6 +134,8 @@ in {
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
             proxy_set_header X-Forwarded-Prefix /codex;
+            # Let sub_filter see uncompressed HTML before nginx gzip runs.
+            proxy_set_header Accept-Encoding "";
           '';
         };
         "= /cookbook" = {
