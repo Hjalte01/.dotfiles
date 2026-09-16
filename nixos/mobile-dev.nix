@@ -11,6 +11,7 @@
   thesisLearning = pkgs.callPackage ../pkgs/thesis-learning.nix {};
   cookbook = pkgs.callPackage ../pkgs/cookbook.nix {};
   aiConcepts = pkgs.callPackage ../pkgs/ai-concepts.nix {};
+  atdlLearning = pkgs.callPackage ../pkgs/atdl-learning.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
 in {
   imports = [
@@ -190,6 +191,18 @@ in {
           tryFiles = "$uri $uri/index.html =404";
           extraConfig = ''
             index index.html;
+          '';
+        };
+        "= /atdl" = {
+          return = "308 /atdl/";
+          extraConfig = "absolute_redirect off;";
+        };
+        "/atdl/" = {
+          alias = "${atdlLearning}/share/atdl-learning/";
+          tryFiles = "$uri $uri/index.html =404";
+          extraConfig = ''
+            index index.html;
+            add_header Cache-Control "no-cache" always;
           '';
         };
         "= /concepts" = {

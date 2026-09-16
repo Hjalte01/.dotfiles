@@ -62,6 +62,19 @@
       "note": "Static files served by nginx; no dedicated app service."
     },
     {
+      "name": "ATDL Learning",
+      "repository": "/home/hjalte/documents/atdl_learning_site",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/atdl-learning.nix",
+      "services": [],
+      "health_urls": [
+        "http://127.0.0.1:8080/atdl/"
+      ],
+      "refresh": "Update the pinned local source commit, then run nxb. No Git push required.",
+      "note": "Static Astro site served by nginx with shared Home and Switch apps navigation."
+    },
+    {
       "name": "Game Factory Gallery",
       "repository": "/home/hjalte/documents/game_factory",
       "kind": "nixos",
