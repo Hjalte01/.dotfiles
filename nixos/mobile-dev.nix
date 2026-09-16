@@ -10,6 +10,7 @@
   gameFactoryGallery = pkgs.callPackage ../pkgs/game-factory-gallery.nix {};
   thesisLearning = pkgs.callPackage ../pkgs/thesis-learning.nix {};
   cookbook = pkgs.callPackage ../pkgs/cookbook.nix {};
+  aiConcepts = pkgs.callPackage ../pkgs/ai-concepts.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
 in {
   imports = [
@@ -187,6 +188,16 @@ in {
         "/thesis/" = {
           alias = "${thesisLearning}/share/thesis-learning/";
           tryFiles = "$uri $uri/index.html =404";
+          extraConfig = ''
+            index index.html;
+          '';
+        };
+        "= /concepts" = {
+          return = "308 /concepts/";
+          extraConfig = "absolute_redirect off;";
+        };
+        "/concepts/" = {
+          alias = "${aiConcepts}/share/ai-concepts/";
           extraConfig = ''
             index index.html;
           '';
