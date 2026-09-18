@@ -6,7 +6,7 @@ buildNpmPackage {
   # Keep deployment source tied to a reviewed commit, never a dirty worktree.
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/game_factory";
-    rev = "ec749fbcbaecc66f1d7a102ab8863439f79ef5c6";
+    rev = "0f20133c39cd2651668c0e7e32282692a2147139";
   };
 
   npmDepsFetcherVersion = 2;
