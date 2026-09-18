@@ -37,6 +37,16 @@
     commonNixosModule = {...}: {
       virtualisation.docker.enable = true;
       users.users.hjalte.extraGroups = ["docker"];
+
+      # Keep recent generations and at least three, even between infrequent builds.
+      programs.nh = {
+        enable = true;
+        clean = {
+          enable = true;
+          dates = "weekly";
+          extraArgs = "--keep-since 7d --keep 3";
+        };
+      };
     };
   in {
     nixosConfigurations = {
