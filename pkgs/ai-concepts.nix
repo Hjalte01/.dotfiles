@@ -4,7 +4,7 @@ stdenvNoCC.mkDerivation {
   version = "1.0.0";
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/ai_concepts";
-    rev = "5d15361cff72e236e62c15769a1ce813500e8ec7";
+    rev = "b09617fbc288b833cb156f35cdde3a6cc5846baf";
   };
   nativeCheckInputs = [nodejs];
   doCheck = true;

@@ -75,6 +75,19 @@
       "note": "Static Astro site served by nginx with shared Home and Switch apps navigation."
     },
     {
+      "name": "AI Concepts",
+      "repository": "/home/hjalte/documents/ai_concepts",
+      "kind": "nixos",
+      "branch": "main",
+      "pin": "pkgs/ai-concepts.nix",
+      "services": [],
+      "health_urls": [
+        "http://127.0.0.1:8080/concepts/"
+      ],
+      "refresh": "Update the pinned local source commit, then run nxb. No Git push required.",
+      "note": "Dependency-free static concept atlas served by nginx at /concepts/."
+    },
+    {
       "name": "Game Factory Gallery",
       "repository": "/home/hjalte/documents/game_factory",
       "kind": "nixos",
