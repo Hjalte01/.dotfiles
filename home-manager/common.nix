@@ -69,6 +69,7 @@ in {
     gcc
     gh
     git
+    git-lfs
     glow
     jq
     lazygit
