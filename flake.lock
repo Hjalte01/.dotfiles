@@ -44,6 +44,21 @@
         "type": "github"
       }
     },
+    "debugger-system": {
+      "locked": {
+        "lastModified": 1789922803,
+        "narHash": "sha256-ZXHSrb9Sfc/7Ms5/mMNA7cXfoucnb3uf4zhNyED1IWY=",
+        "owner": "Hjalte01",
+        "repo": "debugger_system",
+        "rev": "233bb637532aad365fe172216dc1e5c68b405634",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Hjalte01",
+        "repo": "debugger_system",
+        "type": "github"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -189,6 +204,7 @@
     "root": {
       "inputs": {
         "breakd": "breakd",
+        "debugger-system": "debugger-system",
         "disko": "disko",
         "handy": "handy",
         "home-manager": "home-manager",

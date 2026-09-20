@@ -16,6 +16,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    debugger-system.url = "github:Hjalte01/debugger_system";
+
     breakd.url = "github:simonwinther/breakd";
 
     handy = {
@@ -57,6 +59,8 @@
           ./nixos/hardware-configuration.nix
           ./nixos/configuration.nix
           breakd.nixosModules.default
+          inputs.debugger-system.nixosModules.default
+          { services.input-debugger.enable = true; }
 
           # Setup Home Manager as a module
           home-manager.nixosModules.home-manager
