@@ -285,6 +285,7 @@ in {
       curl
       findutils
       git
+      git-lfs
       gnugrep
       gnused
       jq
