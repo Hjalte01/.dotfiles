@@ -6,7 +6,7 @@ buildNpmPackage {
 
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/atdl_learning_site";
-    rev = "3d4a1e097cd815615f3fdcb57010648b9182aa7c";
+    rev = "bd904b8cc5fd135739567e35975395907590116b";
   };
 
   npmDepsFetcherVersion = 2;
