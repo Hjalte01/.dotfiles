@@ -76,6 +76,7 @@
           commonNixosModule
           disko.nixosModules.disko
           ./nixos/mobile-dev.nix
+          {system.configurationRevision = self.rev or "dirty";}
 
           home-manager.nixosModules.home-manager
           {

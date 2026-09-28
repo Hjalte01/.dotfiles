@@ -15,7 +15,7 @@
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
   # Read versions from the exact sources activated alongside these routes.
   hubVersions = pkgs.writeText "vps-hub-versions.json" (builtins.toJSON
-    (lib.mapAttrs (_: app: {
+    ((lib.mapAttrs (_: app: {
       number = app.src.revCount;
       revision = app.src.rev;
     }) {
@@ -26,7 +26,7 @@
       ai-concepts = aiConcepts;
       atdl-learning = atdlLearning;
       cookbook = cookbook;
-    }));
+    }) // { system = { number = 0; revision = config.system.configurationRevision; }; }));
 in {
   imports = [
     "${modulesPath}/profiles/qemu-guest.nix"
@@ -251,6 +251,7 @@ in {
         };
         "/" = {
           root = "${vpsHub}/share/vps-hub";
+          extraConfig = ''add_header Cache-Control "no-cache" always;'';
           tryFiles = "$uri $uri/ =404";
         };
       };
@@ -300,6 +301,7 @@ in {
       CODEX_QUEUE_CODEX = lib.getExe' codex "codex";
       CODEX_QUEUE_HOST = "127.0.0.1";
       CODEX_QUEUE_PORT = "8787";
+      CODEX_QUEUE_REVISION = codexQueue.src.rev;
       CODEX_QUEUE_SESSION_COOKIE_SECURE = "true";
       CODEX_QUEUE_STATE_DIR = "/var/lib/codex-queue";
       CODEX_QUEUE_DEPLOYMENTS = "/etc/codex-queue/deployments.json";
@@ -354,6 +356,7 @@ in {
   systemd.services.codex-queue-deploy = {
     description = "Apply successful queue changes to live mobile-dev apps";
     after = ["network-online.target"];
+    wants = ["network-online.target"];
     restartIfChanged = false;
     stopIfChanged = false;
     path = with pkgs; [bash coreutils git openssh nh nix systemd];
@@ -373,6 +376,13 @@ in {
       WorkingDirectory = "/home/hjalte/.dotfiles";
       TimeoutStartSec = "70min";
       UMask = "0077";
+    };
+  };
+  systemd.paths.codex-queue-deploy = {
+    wantedBy = ["multi-user.target"];
+    pathConfig = {
+      PathChanged = "/var/lib/codex-queue/deployment-request";
+      Unit = "codex-queue-deploy.service";
     };
   };
   systemd.timers.codex-queue-deploy = {

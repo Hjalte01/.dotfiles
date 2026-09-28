@@ -18,7 +18,8 @@
         "http://127.0.0.1:8080/"
       ],
       "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
-      "note": "Static files served by nginx; no dedicated app service."
+      "note": "Static files served by nginx; no dedicated app service.",
+      "version_id": "home"
     },
     {
       "name": "Codex Queue",
@@ -33,7 +34,9 @@
         "http://127.0.0.1:8080/codex/"
       ],
       "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
-      "note": "NixOS-managed service; the separate deployment runner survives queue restarts."
+      "note": "NixOS-managed service; the separate deployment runner survives queue restarts.",
+      "version_id": "codex-queue",
+      "revision_health_url": "http://127.0.0.1:8787/healthz"
     },
     {
       "name": "Cookbook",
@@ -46,7 +49,8 @@
         "http://127.0.0.1:8080/cookbook/"
       ],
       "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
-      "note": "Static files served by nginx; no dedicated app service."
+      "note": "Static files served by nginx; no dedicated app service.",
+      "version_id": "cookbook"
     },
     {
       "name": "Thesis Learning",
@@ -59,7 +63,8 @@
         "http://127.0.0.1:8080/thesis/"
       ],
       "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
-      "note": "Static files served by nginx; no dedicated app service."
+      "note": "Static files served by nginx; no dedicated app service.",
+      "version_id": "thesis-learning"
     },
     {
       "name": "ATDL Learning",
@@ -72,7 +77,8 @@
         "http://127.0.0.1:8080/atdl/"
       ],
       "refresh": "Update the pinned local source commit, then run nxb. No Git push required.",
-      "note": "Static Astro site served by nginx with shared Home and Switch apps navigation."
+      "note": "Static Astro site served by nginx with shared Home and Switch apps navigation.",
+      "version_id": "atdl-learning"
     },
     {
       "name": "AI Concepts",
@@ -85,7 +91,8 @@
         "http://127.0.0.1:8080/concepts/"
       ],
       "refresh": "Update the pinned local source commit, then run nxb. No Git push required.",
-      "note": "Dependency-free static concept atlas served by nginx at /concepts/."
+      "note": "Dependency-free static concept atlas served by nginx at /concepts/.",
+      "version_id": "ai-concepts"
     },
     {
       "name": "Game Factory Gallery",
@@ -98,7 +105,8 @@
         "http://127.0.0.1:8080/games/"
       ],
       "refresh": "Update the pinned source commit, then run nxb. NixOS reloads/restarts affected services automatically.",
-      "note": "Static files served by nginx; no dedicated app service."
+      "note": "Static files served by nginx; no dedicated app service.",
+      "version_id": "game-factory"
     },
     {
       "name": "Dotfiles / mobile-dev",
@@ -114,7 +122,8 @@
         "http://127.0.0.1:8080/healthz"
       ],
       "refresh": "Run nxb to build and activate the committed configuration.",
-      "note": "System configuration; no source pin update needed."
+      "note": "System configuration; no source pin update needed.",
+      "version_id": "system"
     },
     {
       "name": "decades_vintage_dk",
