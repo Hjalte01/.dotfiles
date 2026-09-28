@@ -13,6 +13,20 @@
   aiConcepts = pkgs.callPackage ../pkgs/ai-concepts.nix {};
   atdlLearning = pkgs.callPackage ../pkgs/atdl-learning.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
+  # Read versions from the exact sources activated alongside these routes.
+  hubVersions = pkgs.writeText "vps-hub-versions.json" (builtins.toJSON
+    (lib.mapAttrs (_: app: {
+      number = app.src.revCount;
+      revision = app.src.rev;
+    }) {
+      home = vpsHub;
+      codex-queue = codexQueue;
+      game-factory = gameFactoryGallery;
+      thesis-learning = thesisLearning;
+      ai-concepts = aiConcepts;
+      atdl-learning = atdlLearning;
+      cookbook = cookbook;
+    }));
 in {
   imports = [
     "${modulesPath}/profiles/qemu-guest.nix"
@@ -121,6 +135,13 @@ in {
         sub_filter_once on;
       '';
       locations = {
+        "= /app-versions.json" = {
+          alias = hubVersions;
+          extraConfig = ''
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+          '';
+        };
         "= /healthz" = {
           return = "200 '{\"status\":\"ok\"}'";
           extraConfig = ''

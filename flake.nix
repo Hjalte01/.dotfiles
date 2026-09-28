@@ -38,13 +38,13 @@
       virtualisation.docker.enable = true;
       users.users.hjalte.extraGroups = ["docker"];
 
-      # Keep recent generations and at least three, even between infrequent builds.
+      # Clean on alternate dates, keeping two days and at least three generations.
       programs.nh = {
         enable = true;
         clean = {
           enable = true;
-          dates = "weekly";
-          extraArgs = "--keep-since 7d --keep 3";
+          dates = "*-*-1/1 03:00:00";
+          extraArgs = "--keep-since 2d --keep 3";
         };
       };
     };
