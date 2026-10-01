@@ -2,7 +2,7 @@
   source = builtins.fetchGit {
     url = "file:///home/hjalte/documents/atdl_learning_site";
     lfs = true;
-    rev = "47f16d02ac6025a0880842e7b926ba41f15d221f";
+    rev = "d0da26094f5eb852dceb802dbcb39394e2889eda";
   };
 
   # Static assets are immutable; keep one reusable store copy outside the
