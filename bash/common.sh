@@ -44,7 +44,7 @@ alias cx='codex'
 alias ta='tmux new-session -A -s main'
 
 nxb() {
-  nh os switch "$HOME/.dotfiles#${DOTFILES_FLAKE_TARGET:?DOTFILES_FLAKE_TARGET is not set}"
+  nh os switch "$HOME/.dotfiles#${DOTFILES_FLAKE_TARGET:?DOTFILES_FLAKE_TARGET is not set}" "$@"
 }
 
 conf() {

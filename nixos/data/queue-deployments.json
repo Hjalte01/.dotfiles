@@ -3,8 +3,8 @@
   "dotfiles": "/home/hjalte/.dotfiles",
   "update_command": [
     "bash",
-    "-ic",
-    "nxb"
+    "-c",
+    "source /home/hjalte/.bash_common.sh; nxb --no-nom --diff never"
   ],
   "apps": [
     {

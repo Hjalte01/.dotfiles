@@ -33,7 +33,12 @@ in {
     ./obsidian-webdav.nix
   ];
 
-  nix.settings.experimental-features = ["nix-command" "flakes"];
+  nix.settings = {
+    experimental-features = ["nix-command" "flakes"];
+    # Reclaim unreferenced store paths before site builds exhaust the VPS disk.
+    min-free = 2 * 1024 * 1024 * 1024;
+    max-free = 4 * 1024 * 1024 * 1024;
+  };
   nixpkgs.config.allowUnfree = true;
 
   networking.hostName = "mobile-dev";
