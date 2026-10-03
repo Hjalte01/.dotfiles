@@ -3,6 +3,7 @@
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 {
   config,
+  lib,
   pkgs,
   ...
 }: let
@@ -36,6 +37,9 @@ in {
   security.sudo.wheelNeedsPassword = false;
 
   services.udev.extraRules = ''
+    # Start the mouse remapper only while the physical mouse is connected.
+    SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_MOUSE}=="1", ATTRS{name}=="Logitech MX Master 3S", SYMLINK+="evremapmxmaster3s", TAG+="systemd", ENV{SYSTEMD_WANTS}+="evremap.service"
+
     # Talon/Tobii eye tracker access. Talon's bundled installer cannot write
     # this rule on NixOS because /etc is declarative.
     SUBSYSTEM=="usb", ATTRS{idVendor}=="2104", ATTRS{idProduct}=="0127", TAG+="uaccess"
@@ -327,6 +331,12 @@ in {
         }
       ];
     };
+  };
+
+  systemd.services.evremap = {
+    wantedBy = lib.mkForce [];
+    bindsTo = ["dev-evremapmxmaster3s.device"];
+    after = ["dev-evremapmxmaster3s.device"];
   };
 
   # ==========================================
