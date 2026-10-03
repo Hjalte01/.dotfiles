@@ -26,11 +26,36 @@ in {
 
   systemd.tmpfiles.rules = [
     "d ${webdavData} 0700 ${webdavUser} ${webdavUser} -"
+    "a+ ${webdavData} - - - - u:hjalte:r-x"
     "d ${webdavSecrets} 0710 root ${webdavUser} -"
     "d ${resticRepository} 0700 root root -"
     "d ${resticSecrets} 0700 root root -"
     "L+ /root/README-obsidian-sync.md - - - - /etc/obsidian-webdav/README.md"
   ];
+
+  systemd.services.obsidian-atdl-read-access = {
+    description = "Allow local study agents to read ATDL vault materials";
+    wantedBy = ["multi-user.target"];
+    requiredBy = ["obsidian-webdav.service"];
+    before = ["obsidian-webdav.service"];
+    after = ["systemd-tmpfiles-setup.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    path = [pkgs.acl pkgs.coreutils pkgs.findutils];
+    script = ''
+      install -d -m 0700 -o ${webdavUser} -g ${webdavUser} \
+        ${webdavData}/study ${webdavData}/study/ATDL
+      setfacl -m u:hjalte:r-x ${webdavData} ${webdavData}/study
+      # Repair existing entries without following links outside this course.
+      setfacl -R -P -m u:hjalte:rX ${webdavData}/study/ATDL
+      # Default ACLs survive the WebDAV service's restrictive umask and are
+      # inherited by new files, replacement uploads and nested directories.
+      find ${webdavData}/study/ATDL -type d \
+        -exec setfacl -m d:u:hjalte:r-x {} +
+    '';
+  };
 
   systemd.services.obsidian-webdav-prepare = {
     description = "Prepare credentials for Obsidian WebDAV";
@@ -198,8 +223,10 @@ in {
     `Remotely Save -> Tailscale HTTPS -> nginx -> rclone WebDAV (loopback only)`
 
     Data is stored at `${webdavData}/`, owned by the unprivileged
-    `${webdavUser}` account with mode 0700. The remote is intentionally empty
-    until the iPad performs the initial synchronization.
+    `${webdavUser}` account. The ATDL course folder grants `hjalte` read/traverse
+    access using ACLs, including inherited access for future uploads. Local
+    study agents can read course materials without sudo or vault write access.
+    Other vault contents and WebDAV credentials remain private.
 
     ## WebDAV administration
 

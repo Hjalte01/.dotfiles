@@ -9,10 +9,15 @@ for static nginx sites), health URLs, and refresh instructions. Entries marked
 `none` explicitly have no local hosted app.
 
 After successful queue changes, `codex-queue-deploy.service` updates the relevant
-pin, commits it locally, runs `nxb`, and verifies the live app. The timer checks
-pending deployment records about every ten seconds; it never calls Codex. The
+pin, commits it locally, runs `nxb`, and verifies the live app. A systemd path unit wakes the runner immediately after a deployment request;
+the timer checks pending and temporarily blocked deployments every ten seconds as fallback; it never calls Codex. The
 runner is separate from the queue service and survives its restart during NixOS
-activation. Failed updates show a deployment log and a retry button in the queue.
+activation. Blocked or failed updates hold subsequent prompts and show a visible banner,
+deployment log, retry, and Continue without deploying controls. Dirty worktrees
+recover automatically after their edits are committed; builds require explicit retry.
+Version IDs in the registry are checked against `/app-versions.json`; Codex Queue
+also exposes its process revision at `/codex/healthz`. The hub offers a refresh
+button when the page or shared navigation has a newer live revision.
 
 Add new hosted apps in the mobile-dev modules and this registry, then run `nxb`.
 Do not add arbitrary prompt-supplied commands to the registry. Git pushing remains
