@@ -5,6 +5,11 @@ state_dir="${XDG_STATE_HOME:-$HOME/.local/state}"
 state_file="$state_dir/nightlight-override"
 menu_bin="${NIGHTLIGHT_ROFI:-$HOME/.local/bin/rofi-menu}"
 temperature="${NIGHTLIGHT_TEMPERATURE:-4500}"
+schedule_dir="$state_dir/nightlight"
+schedule_file="$schedule_dir/schedule"
+schedule_config="$schedule_dir/hyprsunset.conf"
+start_time="18:00"
+end_time="04:00"
 rofi_args=()
 
 if [[ "${ROFI_MENU_FULLSCREEN:-0}" == "1" ]]; then
@@ -15,17 +20,97 @@ notify() {
   notify-send "Night light" "$1" -t 2500 || true
 }
 
-ensure_daemon() {
-  if ! systemctl --user is-active --quiet hyprsunset.service; then
-    systemctl --user start hyprsunset.service >/dev/null 2>&1 || true
-    sleep 0.2
+valid_time() {
+  [[ "$1" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]]
+}
+
+load_schedule() {
+  local start end
+  if [[ -f "$schedule_file" ]] && read -r start end < "$schedule_file" &&
+    valid_time "$start" && valid_time "$end" && [[ "$start" != "$end" ]]; then
+    start_time="$start"
+    end_time="$end"
   fi
 }
 
+write_config() {
+  local temporary
+  mkdir -p "$schedule_dir"
+  temporary="$(mktemp "$schedule_config.XXXXXX")"
+  cat > "$temporary" <<EOF
+profile {
+    time = $end_time
+    identity = true
+}
+
+profile {
+    time = $start_time
+    temperature = $temperature
+    gamma = 1.0
+}
+EOF
+  mv "$temporary" "$schedule_config"
+}
+
+prompt_time() {
+  local label="$1" current="$2" value
+  while true; do
+    value="$("$menu_bin" "${rofi_args[@]}" -dmenu -p "$label (HH:MM)" -filter "$current" </dev/null)" || return 1
+    [[ -n "$value" ]] || return 1
+    if valid_time "$value"; then
+      printf '%s\n' "$value"
+      return
+    fi
+    notify "Enter a time from 00:00 to 23:59 (for example 21:30)"
+    current="$value"
+  done
+}
+
+change_schedule() {
+  local start end temporary
+  start="$(prompt_time 'Night light starts' "$start_time")" || return 0
+  end="$(prompt_time 'Night light ends' "$end_time")" || return 0
+  if [[ "$start" == "$end" ]]; then
+    notify "Start and end times must be different; schedule unchanged"
+    return 0
+  fi
+  mkdir -p "$schedule_dir"
+  temporary="$(mktemp "$schedule_file.XXXXXX")"
+  printf '%s %s\n' "$start" "$end" > "$temporary"
+  mv "$temporary" "$schedule_file"
+  start_time="$start"
+  end_time="$end"
+  write_config
+  systemctl --user restart hyprsunset.service
+  reset_schedule
+}
+
+ensure_daemon() {
+  local attempt
+  if ! systemctl --user is-active --quiet hyprsunset.service; then
+    systemctl --user start hyprsunset.service >/dev/null 2>&1 || true
+  fi
+  for ((attempt = 0; attempt < 20; attempt++)); do
+    if hyprctl hyprsunset temperature >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  notify "Night light could not start; try again"
+  return 1
+}
+
 in_night_hours() {
-  local hour
-  hour="$(date +%H)"
-  ((10#$hour >= 18 || 10#$hour < 4))
+  local now start end
+  now="$(date +%H:%M)"
+  now=$((10#${now%:*} * 60 + 10#${now#*:}))
+  start=$((10#${start_time%:*} * 60 + 10#${start_time#*:}))
+  end=$((10#${end_time%:*} * 60 + 10#${end_time#*:}))
+  if ((start < end)); then
+    ((now >= start && now < end))
+  else
+    ((now >= start || now < end))
+  fi
 }
 
 set_on() {
@@ -52,7 +137,7 @@ reset_schedule() {
     hyprctl hyprsunset identity >/dev/null
   fi
   rm -f "$state_file"
-  notify "Back on schedule (18:00-04:00)"
+  notify "Back on schedule ($start_time–$end_time)"
 }
 
 status() {
@@ -85,10 +170,11 @@ menu() {
       "On now" \
       "Off now" \
       "Reset to schedule" \
+      "Change schedule ($start_time–$end_time)" \
       "Warmer" \
       "Cooler" |
       "$menu_bin" "${rofi_args[@]}" -dmenu -i -p "Night light"
-  )"
+  )" || return 0
 
   case "$selection" in
     "Toggle "*)
@@ -102,6 +188,9 @@ menu() {
       ;;
     "Reset to schedule")
       reset_schedule
+      ;;
+    "Change schedule "*)
+      change_schedule
       ;;
     Warmer)
       ensure_daemon
@@ -127,7 +216,17 @@ menu() {
   esac
 }
 
+load_schedule
+
 case "${1:-toggle}" in
+  daemon)
+    rm -f "$state_file"
+    if [[ ! -f "$schedule_file" ]]; then
+      exec "${2:-hyprsunset}"
+    fi
+    write_config
+    exec "${2:-hyprsunset}" --config "$schedule_config"
+    ;;
   on)
     set_on
     ;;

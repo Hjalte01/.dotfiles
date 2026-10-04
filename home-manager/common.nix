@@ -5,6 +5,7 @@
   ...
 }: let
   codex = pkgs.callPackage ../pkgs/codex-cli.nix {};
+  hendrix = pkgs.callPackage ../pkgs/hendrix.nix {};
   canvas-lms-mcp = pkgs.callPackage ../pkgs/canvas-lms-mcp.nix {};
   hostName = osConfig.networking.hostName or "unknown";
   flakeTarget =
@@ -58,6 +59,7 @@ in {
     btop
     bubblewrap
     canvas-lms-mcp
+    hendrix
     codex
     cppman
     curl
