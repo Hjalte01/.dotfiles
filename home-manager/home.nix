@@ -244,6 +244,7 @@ in {
 
   # Packages you want installed just for your user
   home.packages = with pkgs; [
+    (pkgs.callPackage ../pkgs/hendrix-vpn.nix {})
     stdenv.cc.cc.lib # Runtime libstdc++ for Python ML wheels
     zlib # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
@@ -744,7 +745,7 @@ in {
     };
 
     Service = {
-      ExecStart = "${pkgs.hyprsunset}/bin/hyprsunset";
+      ExecStart = "%h/.local/bin/nightlight daemon ${pkgs.hyprsunset}/bin/hyprsunset";
       Restart = "always";
       RestartSec = 2;
     };
