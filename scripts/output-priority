@@ -291,17 +291,20 @@ def tui() -> None:
         print("The Textual package is required for the output TUI.", file=sys.stderr)
         raise SystemExit(1)
 
+    sys.path.insert(0, str(Path.home() / ".local/lib"))
+    from dotfiles_theme import install as install_theme, color as theme_color
+
     class OutputApp(App[None]):
         TITLE = "Output Priority"
         SUB_TITLE = "PipeWire speaker manager"
         CSS = """
-        Screen { background: #10141c; color: #d8dee9; }
-        Header { background: #5e81ac; color: white; }
-        #body { height: 1fr; margin: 1 2; border: round #4c566a; padding: 1 2; }
-        #summary { height: 5; color: #88c0d0; margin-bottom: 1; }
+        Screen { background: $background; color: $foreground; }
+        Header { background: $primary; color: $background; }
+        #body { height: 1fr; margin: 1 2; border: round $border; padding: 1 2; }
+        #summary { height: 5; color: $primary; margin-bottom: 1; }
         #devices { height: 1fr; }
-        #help { height: 3; color: #81a1c1; border-top: solid #3b4252; padding-top: 1; }
-        Footer { background: #2e3440; }
+        #help { height: 3; color: $primary; border-top: solid $border; padding-top: 1; }
+        Footer { background: $panel; }
         """
         BINDINGS = [
             ("q", "quit", "Quit"), ("up", "previous", "Select up"),
@@ -340,6 +343,7 @@ def tui() -> None:
             return self.state.get("config", {}).get("order", [])
 
         def on_mount(self) -> None:
+            install_theme(self)
             self.refresh_state()
             self.set_interval(2.0, self.refresh_state)
 
@@ -365,11 +369,11 @@ def tui() -> None:
             priorities = {name: rank for rank, name in enumerate(ranked, start=1)}
             summary = Text()
             mode = "TEMPORARY OVERRIDE" if override else "AUTOMATIC HIERARCHY"
-            summary.append(f"  {mode}\n", style="bold #ebcb8b" if override else "bold #a3be8c")
+            summary.append(f"  {mode}\n", style=("bold " + theme_color("yellow")) if override else ("bold " + theme_color("green")))
             summary.append("  Default: ", style="dim")
-            summary.append(labels.get(target, target or "No usable output"), style="bold #88c0d0")
+            summary.append(labels.get(target, target or "No usable output"), style=("bold " + theme_color("accent")))
             summary.append("\n  Volume keys: ", style="dim")
-            summary.append(labels.get(volume, volume or "No usable output"), style="bold #88c0d0")
+            summary.append(labels.get(volume, volume or "No usable output"), style=("bold " + theme_color("accent")))
             self.query_one("#summary", Static).update(summary)
 
             content = Text()
@@ -381,7 +385,7 @@ def tui() -> None:
                 pointer = "❯" if index == self.selected else " "
                 rank = f"{priorities[name]:>2}" if name in priorities else " —"
                 status = "● connected" if connected else "○ unplugged"
-                status_style = "#a3be8c" if connected else "#616e88"
+                status_style = theme_color("green") if connected else theme_color("muted")
                 flags = []
                 if name == current: flags.append("DEFAULT")
                 if name == override: flags.append("OVERRIDE")
@@ -392,7 +396,7 @@ def tui() -> None:
                 content.append(f"{labels.get(name, name):<34.34}", style=f"bold {line_style}")
                 content.append(f" {status:<14}", style=f"{status_style} {line_style}")
                 if flags:
-                    content.append("  " + " · ".join(flags), style=f"bold #ebcb8b {line_style}")
+                    content.append("  " + " · ".join(flags), style=f"bold {theme_color('yellow')} {line_style}")
                 content.append("\n")
             self.query_one("#devices", Static).update(content)
 

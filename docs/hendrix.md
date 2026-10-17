@@ -9,34 +9,116 @@ nodes directly, and only submits or cancels jobs after you confirm an action.
 
 ```bash
 hendrix password set   # Type your KUnet password into the desktop keyring
-hendrix up             # Existing KU network is reused; new VPN sessions ask for NetIQ MFA
+hendrix up             # Reuse KU network or log in (optional automatic TOTP below)
 hendrix setup-ssh      # Optional: installs your configured public key into your own remote account
 hendrix connect        # Open/reuse an authenticated SSH connection
 hendrix tui
 ```
 
-`hendrix password set` can update an expired password. `hendrix password forget`
-removes it; subsequent VPN logins ask interactively. Passwords and VPN cookies are
-passed through stdin, never saved in the repository, Nix store, command arguments
-or job history. The MFA seed is not stored. A failed login is not retried
-automatically. Keyring integration is desktop-only; the shared app also works on
+`hendrix password set` saves the KUnet password used for **both VPN and Hendrix
+SSH** on this PC. It can update an expired password. `hendrix password forget`
+removes it; subsequent logins ask interactively. Passwords and VPN cookies are
+passed through private pipes, never saved in the repository, Nix store, command arguments
+or job history. The saved password is attempted only
+once per connection; if it fails, SSH asks you to type a password in the terminal.
+Keyring integration is desktop-only; the shared app also works on
 the mobile VPS if the KU network is reachable separately.
+
+### Optional automatic authenticator codes
+
+`hendrix totp set` accepts a hidden Base32 authenticator setup key or an
+`otpauth://totp/…` URI. Alternatively, import a local authenticator QR image:
+
+```sh
+hendrix totp import /absolute/path/to/authenticator-qr.png
+hendrix totp status
+hendrix connect
+```
+
+Use the enrollment QR/setup key for the same account that currently supplies
+your VPN codes. NetIQ enrollment links that are not ordinary `otpauth` TOTP
+provisioning are unsupported. SHA1, six digits and a 30-second period are
+required; other settings are rejected rather than silently misinterpreted.
+Do not put the secret itself in command arguments, shell history or dotfiles.
+Delete any temporary QR image after importing it; the image contains the
+authenticator secret.
+
+The seed is saved separately from the password in the desktop Secret Service
+keyring. OpenConnect generates the current code when the VPN requests it,
+using an inherited anonymous RAM file; the seed is never included in command
+arguments, environment variables, the Nix store or persistent helper files.
+It is accessed only when explicitly starting a new VPN login. Background TUI
+refreshes and SSH password authentication do not read it. Without an available
+saved seed, MFA remains interactive. Authentication failures are not retried
+automatically. `hendrix totp forget` returns to entering codes manually.
+
+Keeping both credentials on this PC reduces MFA's protection if the PC or
+unlocked keyring is compromised. It does not require browser access, and it
+does not upload the authenticator seed to the VPS.
 
 SSH key setup preserves existing keys and uses the first configured identity with
 a matching `.pub` file. Encrypted keys may need `ssh-add`. If the server declines
-key authentication, use `hendrix connect` with your password: the app's SSH/sync
+key authentication, **c / Connect**, `hendrix connect`, and `hendrix ssh` use the
+saved password through OpenSSH's private askpass pipe. Keys and an existing SSH
+session take precedence. The shared password is only supplied to the configured
+`fhz806@hendrixgate` account; unexpected hosts, accounts, key-passphrase and MFA
+prompts cannot consume it. A rejected or timed-out saved-password login falls back
+to one manual password attempt. A locked/unavailable keyring also falls back to
+interactive login after a bounded wait. Typing a password here does not replace
+the keyring entry; use `hendrix password set` to update it. Background refreshes do not read the keyring or authenticate
+with the password; reconnect explicitly with **c** when needed. The app's SSH/sync
 commands reuse the authenticated connection, which stays alive for 15 minutes
 after its last use. `hendrix ssh` uses the same connection. Plain `ssh hendrix`
 continues to use your existing SSH configuration.
 
-`hendrix down` stops only the VPN started by this helper and restores the previous
-Tailscale DNS preference. Batch jobs continue running. Quit the TUI with **q**;
+On a new direct desktop connection, the tool checks the gateways returned by
+Hendrix DNS in parallel for an SSH greeting, allowing up to five seconds. It then
+connects through the first responding gateway while retaining the configured SSH
+hostname and account. This avoids a gateway that accepts TCP but stalls before
+authentication. No responding gateway produces a network error before any password
+attempt. Custom SSH proxies, jump hosts and other accounts retain their configured
+transport. An existing authenticated connection is reused without gateway probes.
+Login errors and **Ctrl+C** restore the TUI instead of leaving the terminal suspended;
+press **c** to try again. VPN connectivity alone does not prove SSH is available.
+
+The desktop uses `systemd-resolved` to route DNS separately for Wi-Fi, the KU VPN,
+and Tailscale. OpenConnect registers the KU DNS servers and search domains on
+`hendrix0`; Tailscale registers MagicDNS on `tailscale0`. The helper leaves
+Tailscale DNS enabled, so Obsidian can reach the mobile VPS while Hendrix is in use.
+The desktop NixOS configuration enables this setup through `nxb`.
+It also routes `tail55f864.ts.net` directly to Tailscale's local MagicDNS
+resolver (`100.100.100.100`). This takes precedence over the tailnet's broader
+`ts.net` route to public DNS, which cannot resolve private device names.
+If the hub or `/codex/` fails, compare `resolvectl query
+mobile-dev.tail55f864.ts.net` with `sudo tailscale dns query
+mobile-dev.tail55f864.ts.net`: an internal answer with a failed system lookup
+indicates DNS routing rather than a stopped VPS service.
+
+`hendrix down` stops only the VPN started by this helper and removes its per-link
+DNS settings. Batch jobs continue running. Quit the TUI with **q**;
 quitting does not disconnect the VPN or cancel jobs.
 
 After VPN authentication, the helper allows up to 20 seconds for Hendrix DNS to
 become available. If that fails, it disconnects and cleans up before reporting
 the error. A DNS failure alone does not establish that the cluster is down.
 Tunnel diagnostics are available with `journalctl -t openconnect`.
+
+## Remote terminal setup
+
+Run `hendrix shell-setup` on the PC once, then open a new session with
+`hendrix ssh`. This installs Ghostty's terminal definition and a pinned static
+zoxide binary in your own cluster account. Existing shell startup files are
+preserved, with backups under `~/.config/hendrix/backups/` before adding hooks.
+The setup is repeatable and only affects interactive Bash sessions.
+
+The prompt puts input on a separate line. **Tab / Shift+Tab** cycle completions;
+**Up / Down** search history matching the text already typed. Pasted multiline
+text stays editable before execution. Existing Bash completion is loaded.
+
+`cd mean` jumps to the registered MeanFlow project from anywhere. Ordinary
+`cd path`, `cd ..` and `cd -` still work. Visiting other directories teaches
+zoxide more destinations; `cd keyword` then finds them. No directory is moved
+or renamed, and submitted Slurm jobs keep running through reconnection.
 
 ## GPU numbers
 
@@ -47,8 +129,11 @@ totals and node rows follow both this dropdown and the text filter. Unknown GPU
 allocations are visible with the broader filters. Filtering uses cached data and
 makes no additional Slurm requests.
 
-Use **hjkl** as table arrows (j/k move rows; h/l scroll horizontally), **Tab** to
-move between controls, and **Alt+h / Alt+l** to change tabs. In dropdowns, j/k open
+Press **1** for GPU models, **2** for GPU nodes, **3** for Projects, **4** for
+Jobs, **5** for Logs, and **6** for the Cluster queue. Numbers appear on the tabs and panel borders.
+Use **hjkl** as table arrows (j/k move rows; h/l scroll horizontally), **g/G** for
+the first/last row, **Ctrl+d/u** to page down/up, **Tab / Shift+Tab** to move
+between controls, and **Alt+h / Alt+l** to change tabs. In dropdowns, j/k open
 and move through choices; Enter selects. In text fields, hjkl type normally.
 **Shift+L** opens job logs. Refreshes retain the selected table row when possible.
 
@@ -58,7 +143,8 @@ Within a model, known free capacity comes first; unavailable nodes come last.
 Click a Model, GPU, CPU, RAM, Node or State heading to sort; click again to reverse.
 Press **=** to restore the default preference. There is no separate sort dropdown. More host RAM/CPUs
 does not imply a faster GPU: GPU memory fit, actual workload performance and queue
-wait matter. The app does not benchmark or estimate wait times.
+wait matter. The app does not benchmark training speed. Click **Pending tasks**
+to sort by visible pending demand (unknown counts remain last).
 
 Both tables use **free(total)**: `4(6)` means four unallocated GPUs out of six.
 CPU counts show effective CPUs minus allocated CPUs. RAM counts show configured
@@ -74,7 +160,8 @@ requests always preserve the full hostname. The **Reasons off (N)** button count
 visible nodes with a reason and optionally shows that column; it starts hidden.
 Press **R** to toggle it. More details are under **? / Help**.
 
-Use **v** to mark/unmark node rows and **Shift+V** to clear marks. **y** copies a
+Use **v** to mark/unmark node rows or all rows for the focused GPU model, and
+**Shift+V** to clear marks. **y** copies a
 one-GPU request such as `#SBATCH --gres=gpu:a100:1` for marked rows, or the focused
 node/model if nothing is marked. Slurm chooses the node. Several marked nodes do
 not request several GPUs. Mixed-model selections open a chooser because GRES
@@ -96,19 +183,134 @@ not imply the node can fit another job. Spread jobs can have more CPU/RAM resour
 per GPU, but the app does not infer Hendrix's scheduling policy from counts.
 
 Host RAM is separate from GPU VRAM. GPU model names do not necessarily identify a
-VRAM variant. Select a model row to prefill the next submission, or type the exact
-Slurm GRES model name in the submission form. Default: `gpu` partition, one
-`a100`, four CPUs and 32 GB host RAM. `any` requests an unspecified GPU. There is
-no silent fallback to another GPU model. The GPU count field is limited to 1–8;
-Slurm still enforces actual permissions and limits. Compare queue wait plus run
-time when deciding between models; no benchmark or automatic GPU ranking is
-performed by the tool.
+VRAM variant. The model overview adds nominal VRAM per GPU, healthy unallocated
+capacity, and pending tasks for the partition selected in Cluster queue. Its
+capacity totals still follow the GPU search/state filter; pending demand is for
+the whole selected partition. Any GPU demand appears separately above the table.
+Scroll horizontally with h/l for extra columns on narrow terminals.
 
-Jobs refresh every 30 seconds and GPU inventory every 60 seconds. Manual refresh
+Press **b** to run the current project: marked models preselect the
+GPU list, otherwise the focused GPU row takes precedence over the remembered
+selection. From Projects, the form reuses the last selected script and GPU counts.
+In the form, **j/k** move between models, **Space / Enter** select or deselect,
+and **h/l** or **−/+** decrease/increase the GPU count for that model. Zero disables
+that model. Each selected model launches **one separate job** running the chosen
+script with that many GPUs; selecting two models runs the script twice. Confirm
+shows every request before submission. The tool stops on the first failed or
+uncertain submission; earlier accepted jobs remain active, and later requests
+are not attempted.
+
+The list shows free(total) and the largest observed per-node GPU count. Counts
+are capped at that capacity and the tool's limit of eight. You can request more
+than the currently free count and queue; totals across nodes do not promise a
+single allocation. Slurm still enforces permissions and limits. **any** requests
+an unspecified model; there is no automatic fallback. Advanced settings also
+lets you add an exact GRES model missing from inventory (capacity is then unknown).
+
+**a** expands/collapses Advanced settings. Change CPU count for data loading or
+workers, host RAM when your process needs more memory, time limit for longer
+runs, and partition only when you have access to another one. Initially the form
+uses four CPUs, 32G host RAM, the `gpu` partition, and the preset's time limit.
+These settings and GPU counts are saved after confirmation in
+`~/.config/hendrix/launch-settings.json`, separately for each project, host,
+script and arguments. The selected script is remembered too. Switching scripts
+restores its settings, retaining edits made during the current form session.
+**b** reviews the request from the GPU list; **Ctrl+Enter** reviews from any field.
+In confirmation, **y / Enter** confirms, **n / Esc** goes back; arrows and Page Up/Down
+scroll long reviews. **Esc** leaves a text field,
+then collapses Advanced or closes the form. Cancelling confirmation does not
+save changes. Your batch script must support the requested GPU count; the tool
+does not change training parallelism or divide the workload between jobs.
+
+Jobs refresh every 30 seconds; GPU inventory and cluster queue every 60 seconds. Manual refresh
 is **r**. Connection failures mark data stale and pause polling until you reconnect
 or manually refresh. Finished-job accounting is queried every 60 seconds over the
 last two days. Pending reason and elapsed runtime are different from queue wait;
-elapsed runtime is not an estimated completion time.
+elapsed runtime is not an estimated completion time. A failed individual query
+keeps other working views and polling available; its cached data is marked stale.
+When all attempted queries fail, polling stops until reconnect/manual refresh.
+Array jobs appear once per task using IDs such as `9443_0`, consistently across
+queue and accounting queries. Pending arrays are expanded so the active count
+counts tasks rather than compressed array ranges or duplicate internal IDs.
+
+## Cluster queue and comparing GPUs
+
+**6 · Cluster queue** defaults to `gpu`. Choose another inventoried/visible
+partition or **All visible partitions**. Search with **/**; **Esc** returns to
+the table. Refresh/filtering preserves the selected row when it remains visible.
+The table shows job/array ID, GPU request scope, pending task count and concurrency
+cap, CPUs per job, minimum host RAM per CPU/node, time limit, raw pending reason,
+submission time and scheduler start estimate. Both timestamps use your PC's local
+timezone. Select a row to read its full details below the horizontally scrolling
+table. Arrays are counted from compact ranges, including stepped ranges and `%`
+caps; truncated, overlapping or unsupported ranges show `?`, with known partial
+counts identified. A missing cap for a materialized array task is unknown.
+
+Summary counts mean **visible pending demand**, not your queue position. Resources
+and Priority are waiting; dependencies, holds, array concurrency caps and future
+starts are blocked; other reasons retain their raw explanation. Blocked tasks
+are included and separated, not treated as immediately competing jobs. Jobs
+requesting an unspecified model stay in **Any GPU** and are never counted against
+every GPU model. Jobs with no GPU reported have their own group. Multi-partition
+jobs are counted once in the all-partitions view. Restricted jobs may be hidden
+by cluster policy. Queue freshness, query failures and partial parsing appear
+above the table. Filters use the cached bulk query and make no SSH calls.
+
+In the launch form, press **c / Compare GPUs**. The comparison takes the current
+script/arguments, partition, CPUs, host RAM and time limit, and starts its editable
+GPU count at the focused model's count, or one. It includes every inventoried
+model in that partition, even occupied/unavailable models. Enter an optional
+**minimum VRAM per GPU** in nominal GB, including the headroom you need. Blank
+means workload memory needs are unknown. This advice is kept separately from
+Slurm flags in `launch-settings.json`, using the same project/script/arguments
+identity; it is saved only after submission confirmation. Older settings still
+load, and closing either form or cancelling confirmation saves no changes.
+
+The assessment is **likely fits by specification**, **too small**, **variant
+uncertain** or **unknown**. Manufacturer guidance: [L40S](https://www.nvidia.com/en-in/data-center/l40s/)
+and [A40](https://images.nvidia.com/content/Solutions/data-center/a40/nvidia-a40-datasheet.pdf)
+have 48 GB; [A100](https://www.nvidia.com/en-us/data-center/a100/) has 40/80 GB
+variants; [H100](https://www.nvidia.com/en-us/data-center/h100/) has 80 GB and
+94 GB NVL variants; [TITAN RTX](https://developer.nvidia.com/titan-rtx) has 24 GB.
+These are nominal specifications, not measured usable memory
+or confirmation of installed variants. Hendrix aliases without an unambiguous
+specification mapping remain unknown. Hardware NVLink support does not establish
+installed node connectivity; the app leaves that unknown.
+
+**Observed resource fit** checks GPU count, CPUs and host RAM together on each
+individual healthy node in the partition. Summing spare resources across nodes
+does not establish fit. Multiple nodes/tasks and additional script resource or
+placement constraints make this assessment unknown. It does not promise immediate
+scheduling: reservations, priority, permissions and policy still apply.
+
+Press **Compare** to query each model with [Slurm `sbatch --test-only`](https://slurm.schedmd.com/sbatch.html#OPT_test-only).
+The actual local batch script, including scheduling directives, is supplied over
+stdin as `/dev/stdin` with preset arguments. Shared resource options override
+partition/GRES/CPUs/host RAM/time identically to submission; other directives such
+as account, QoS, dependencies and future starts remain in the script. The remote
+project directory must already exist. Comparison creates no source mirror,
+snapshot, submission manifest, history record, saved settings or Slurm job.
+Responses from stdout/stderr supply scheduler estimates and per-model query times;
+errors or absent estimates are explicit, never interpreted as zero wait.
+
+A star highlights the **earliest predicted start among choices likely to meet the
+entered memory requirement**. Training speed is unmeasured, so this does not
+identify earliest completion. Editing GPU count, memory guidance or script
+contents invalidates results, including changes while a query is running. A new
+comparison is required after changing form resources or scripts. Estimates can
+change with cluster demand even if your request is unchanged.
+
+**u / Use this model** returns to the launch form with that single model/count
+selected. Going back retains only draft memory advice and keeps the previous GPU
+selection. You can still select multiple models to run the script in separate
+jobs; nothing automatically chooses a model or runs a benchmark.
+
+The text queries and stdin estimation path were checked against Hendrix's
+**Slurm 20.11.9**. Queue inspection uses one `scontrol show jobs -o` query with
+`SLURM_BITSTR_LEN=4096`, not a query per array task. Queue timestamps are queried
+under `TZ=UTC`. Estimates retain the remote scheduling timezone (including for
+`--begin`/`--deadline`) and convert the returned timestamp to epoch seconds on the
+remote host before local display, including daylight saving time.
 
 ## Projects and snapshots
 
@@ -146,7 +348,7 @@ your SSH login; the TUI does not configure the cluster environment for you.
 - **s / Sync:** update only the tool-owned `.hendrix/source` mirror. Removed source
   files are removed from this mirror; existing datasets/environments/results are
   protected. Large shared directories and `.hendrix/` are always excluded.
-- **b / Submit:** review the script and resource request, sync first, copy source
+- **b / Submit:** choose GPU models and counts, review requests, sync first, copy source
   into a unique `.hendrix/snapshots/TOKEN` directory, and submit from that snapshot.
   Shared directories are symlinks to the existing remote project. `MEANFLOW_VENV`
   points at the existing environment. Later syncs cannot change the snapshot.
@@ -165,8 +367,19 @@ uncommitted edits as well as committed code.
 
 ## Jobs, logs and lost submission responses
 
-The Jobs tab shows your jobs. **Shift+L / Logs** displays the latest 150 lines;
-**Follow** refreshes this bounded tail every 10 seconds while connected.
+The Jobs tab loads your active jobs and the past week of accounting history.
+The recent-finished count accepts `0` to hide
+finished jobs, a positive count to limit them, or `-1` to show all loaded history.
+Job columns size themselves to the visible rows and shrink when longer rows are
+removed or hidden, keeping the table compact in a narrow terminal.
+**Shift+L / Logs** or Enter on a job displays its latest 150 lines. Once logs are
+open, selecting another job switches the log view. **Follow** refreshes the
+selected job's bounded tail every 10 seconds while connected; turning it off
+pauses refreshes and still lets you switch between jobs.
+Resolved log paths are retained when a job leaves Slurm's live records. For jobs
+submitted outside the TUI, completed-job logs can also be found in the selected
+project root or directly inside its `results/runs/*/` directories, using names
+such as `slurm-628_3.out` and `slurm-628_3.err`.
 **stderr** switches streams. Cancellation requires confirmation.
 **Download results** copies logs and, for the seeded MeanFlow presets, the full
 run output (including potentially large checkpoints) into the owning local
@@ -189,6 +402,112 @@ The second command requires typing the token to confirm. Automatic reconciliatio
 covers the last two days and depends on Slurm retaining job comments in accounting.
 No submission is automatically retried.
 
+## Other cluster workflows
+
+These workflows use **SSH and batch scripts** (`t / SSH` or `hendrix ssh`); the
+TUI currently provides advisory queue/comparison views, ordinary batch submission,
+monitoring, cancellation, bounded logs, sync/snapshots and result downloads.
+New array/dependency controls, automatic selection and benchmark execution are
+outside this upgrade. The examples below are commands to run yourself.
+
+**Batch jobs** enter the queue immediately and survive disconnects:
+
+```bash
+sbatch --partition=gpu --gres=gpu:l40s:1 --cpus-per-task=4 --mem=32G --time=05:00:00 train.sbatch configs/hendrix_b4.yml
+squeue -u "$USER"
+scontrol show job JOB_ID
+```
+
+**Interactive work** uses an allocation, then a shell on its compute resources:
+
+```bash
+salloc --partition=gpu --gres=gpu:l40s:1 --cpus-per-task=4 --mem=32G --time=01:00:00
+srun --pty bash
+hostname
+nvidia-smi
+```
+
+Interactive shells require a maintained session (for example tmux on the login
+host, if available). Exit the compute shell and allocation when finished. Put
+long unattended training in a batch script so losing SSH does not lose your shell.
+Do training on allocated compute resources, and use the login host for setup and
+scheduler/file operations.
+
+**Arrays**, dependencies, holds and future starts remain script/SSH controls:
+
+```bash
+sbatch --array=0-9%2 --output='array-%A_%a.out' sweep.sbatch
+sbatch --dependency=afterok:JOB_ID evaluate.sbatch
+sbatch --dependency=afterany:JOB_ID cleanup.sbatch
+sbatch --hold train.sbatch
+scontrol hold JOB_ID
+scontrol release JOB_ID
+sbatch --begin=now+1hour train.sbatch
+```
+
+An array script uses `SLURM_ARRAY_TASK_ID` to choose its configuration. The `%2`
+cap limits simultaneous tasks; each task has the script's full resource request.
+`afterok` waits for success, `afterany` waits for completion regardless of status.
+A failed dependency can remain pending. Holds and requested future starts are
+separate from resource/priority waiting. A future start is an eligibility time,
+not a guaranteed dispatch time. The launch form preserves such batch directives,
+so review the script as well as its resource fields.
+
+**Monitoring/accounting and cancellation**:
+
+```bash
+squeue -u "$USER"
+squeue --start -u "$USER"
+sacct -X -j JOB_ID --format=JobID,State,Elapsed,Timelimit,AllocTRES,ExitCode
+sstat -j JOB_ID.batch --format=JobID,MaxRSS,AveCPU
+scancel JOB_ID
+scancel ARRAY_ID_TASK_ID
+```
+
+Accounting/step metrics depend on the site's retention and configuration. Inspect
+exit status as well as logs. The TUI's cancellation requires confirmation; an SSH
+`scancel` acts immediately. Cancelling a base array ID cancels its remaining tasks.
+Use `tail -f` over SSH for a continuous log, or TUI Follow for a bounded tail;
+output paths are defined by your script or the TUI's submission record.
+
+**Modules, environments, files and storage**:
+
+```bash
+module avail
+module load MODULE_NAME
+source .venv-hendrix/bin/activate
+df -h .
+quota -s                        # If the site provides quota reporting
+```
+
+Place the appropriate module/environment setup in your script. Keep packages in
+the project environment; the TUI reuses it and does not install dependencies.
+From the PC use `scp` or `rsync` with your existing SSH access for datasets,
+environments and custom results. Inspect transfer destinations and storage
+capacity; large shared data is intentionally excluded from TUI source sync.
+Preview and Sync update the owned mirror, while Submit uses a retained snapshot;
+transfer datasets to the existing remote shared directories separately.
+
+**Notebooks and tunnels** need an interactive allocation and manual SSH setup.
+On the allocated compute node run, with Jupyter installed in your environment:
+
+```bash
+jupyter lab --no-browser --ip=127.0.0.1 --port=8888
+```
+
+Where the cluster permits SSH to your allocated node, open a separate PC terminal
+and forward to its loopback address through the login host:
+
+```bash
+ssh -J hendrix -L 8888:127.0.0.1:8888 USER@ALLOCATED_NODE -N
+```
+
+Open the token URL at `http://127.0.0.1:8888` on the PC. If compute-node SSH is
+restricted, use the site's approved relay/tunnel procedure. Forwarding directly
+from the login host to a compute node's external address cannot reach a notebook
+bound only to compute loopback. Keep the allocation and tunnel alive; stop the
+notebook and release resources afterwards. The TUI does not create tunnels.
+
 ## Validation
 
 Offline tests use disposable local directories, a fake `sbatch`, and mocked SSH
@@ -200,3 +519,27 @@ PYTHONPATH=scripts python -m unittest discover -s tests -p test_hendrix.py -v
 
 Run with the Textual-enabled Python provided by the Nix package. The package and
 VPN helper are activated with the normal `nxb` rebuild.
+
+## Keeping the Jobs view readable
+
+Jobs defaults to **Active + recent finished**, showing every active job and the
+three most recently finished jobs. Change the view to **Active only**, **Recent
+finished**, **Completed only**, or **All jobs**. Set the recent count to any
+nonnegative number; **0** shows all finished jobs in the loaded history. Recent
+finished includes failures/cancellations so a failed latest run stays visible.
+Active jobs are shown first; finished jobs use Slurm completion time when known.
+Filtering uses cached data and does not cancel, delete, or query jobs separately.
+The existing accounting query loads the last two days of history.
+
+The table separates **Project** from **Run / preset** and shows compact GPU
+requests instead of long accounting TRES strings. Existing registered jobs get
+preset labels from their saved script/arguments even if their old Slurm names
+were generic.
+
+Before submitting, edit the **Run name** field if desired. The default convention
+is `project--preset--YYYYMMDD-HHMMSS`; each separate job appends its GPU model,
+for example `meanflow-thesis--mnist-mf--20261005-193000--l40s`. The review dialog
+shows the name before submission. The name is passed to Slurm and recorded in
+local submission history; result directories and job IDs keep their existing
+layout. Names allow letters/digits, dots, underscores and hyphens, with at most
+96 characters before the GPU suffix. Existing running jobs are not renamed.

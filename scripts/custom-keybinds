@@ -64,10 +64,11 @@ format_keybinds() {
     }
     function pretty_key(s) {
       s = trim(s)
-      if (s == "RETURN") return "Enter"
-      if (s == "SPACE") return "Space"
+      if (toupper(s) == "RETURN") return "Enter"
+      if (toupper(s) == "SPACE") return "Space"
       if (s == "comma") return ","
       if (s == "Print") return "Print"
+      if (s ~ /^[a-z]$/) return toupper(s)
       return s
     }
     function title_from_comment(line) {
@@ -86,7 +87,7 @@ format_keybinds() {
       key = pretty_key(key)
       title = trim(title)
       command = trim(command)
-      if (key ~ /^switch:/ || command == "true") return
+      if (key ~ /^switch:/ || key == "catchall" || command == "true") return
       if (title == "" || title == "exec") title = "Unnamed"
       if (submap_prefix != "") {
         if (key ~ /^[a-z]$/) key = toupper(key)
@@ -115,10 +116,10 @@ format_keybinds() {
       }
       next
     }
-    /^[ \t]*bindd[ \t]*=/ {
+    /^[ \t]*bindd[iu]*[ \t]*=/ {
       line = $0
       line = strip_keybind_comment(line)
-      sub(/^[ \t]*bindd[ \t]*=[ \t]*/, "", line)
+      sub(/^[ \t]*bindd[iu]*[ \t]*=[ \t]*/, "", line)
       n = split(line, parts, ",")
       if (n >= 5) {
         command = trim(parts[4])

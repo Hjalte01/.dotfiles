@@ -21,7 +21,7 @@
     breakd.url = "github:simonwinther/breakd";
 
     handy = {
-      url = "github:cjpais/Handy/v0.9.4";
+      url = "github:cjpais/Handy/v0.9.8";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

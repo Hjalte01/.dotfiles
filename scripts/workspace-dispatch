@@ -16,6 +16,18 @@ usage() {
 
 [[ -n "$action" && -n "$workspace" ]] || usage
 
+# Slots are names: their underlying compositor IDs stay with the parked set.
+[[ "$workspace" =~ ^([1-9]|10)$ ]] || usage
+if [[ "$workspace" != "10" ]]; then
+  workspace="name:$workspace"
+fi
+
+# Serialize slot navigation with set switches.
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/workspace-sets"
+mkdir -p "$state_dir"
+exec 9>"$state_dir/state.lock"
+flock 9
+
 cancel_key_hints() {
   /home/hjalte/.local/bin/desktop-which-key hold-end >/dev/null 2>&1 || true
 }

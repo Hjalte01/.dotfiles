@@ -1,0 +1,22 @@
+[package]
+name = "desktop-which-key"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+fontdue = "0.9"
+image = { version = "0.25", default-features = false, features = ["png"] }
+libc = "0.2"
+memmap2 = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+xkbcommon = "0.9"
+
+[profile.release]
+lto = "thin"
+strip = true

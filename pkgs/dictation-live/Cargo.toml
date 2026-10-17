@@ -1,0 +1,20 @@
+[package]
+name = "dictation-live"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+dictation = { path = "../dictation" }
+earshot = "=1.2.2"
+gtk = "0.18"
+gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
+hound = "3.5"
+rustfft = "6"
+serde_json = "1"
+transcribe-cpp = { version = "=0.2.4", default-features = false, features = ["dynamic-backends"] }
+
+[profile.release]
+lto = "thin"
+strip = true

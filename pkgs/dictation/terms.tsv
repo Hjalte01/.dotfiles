@@ -1,0 +1,14 @@
+# Canonical spelling followed by tab-separated spoken/transcribed aliases.
+# Matching ignores case, accepts flexible whitespace, and respects word boundaries.
+DDPM	ddpm	d d p m	dd pm	ddp m	d dpm	dd p m	d d pm	d dp m	dee dee pee em	de de pe em	d.d.p.m	d. d. p. m
+iMF	imf	i m f	i mf	im f	eye em eff	i em ef	i.m.f	i. m. f
+MeanFlow	mean flow	mean-flow	meanflow
+DDIM	ddim	d d i m
+SDE	sde	s d e
+ODE	ode	o d e
+VAE	vae	v a e
+ELBO	elbo	e l b o
+MSE	mse	m s e
+CFG	cfg	c f g
+JVP	jvp	j v p
+VJP	vjp	v j p

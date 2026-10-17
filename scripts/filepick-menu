@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "--drag-last" ]]; then
+  if message="$(filepick --drag-last 2>&1)"; then
+    exit 0
+  else
+    notify-send "File drag failed" "$message"
+    exit 1
+  fi
+fi
+
+# Preserve the exact browser window and its focused input before Ghostty opens.
+destination="$(hyprctl -j activewindow 2>/dev/null | jq -c '{address, class, pid}')" || destination='{}'
+exec ghostty --class=local.filepick --title="File picker" -e filepick --destination "$destination" "$@"

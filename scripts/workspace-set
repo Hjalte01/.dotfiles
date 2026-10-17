@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Named desktop contexts, parking whole Hyprland workspaces without moving windows."""
+
+import argparse
+from contextlib import contextmanager
+import fcntl
+import html
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import uuid
+
+
+SLOTS = {str(n) for n in range(1, 10)}
+PARKED = re.compile(r"^set:([^:]+):([1-9])$")
+STATE = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "workspace-sets/state.json"
+
+
+def run(*args, **kwargs):
+    result = subprocess.run(args, text=True, capture_output=True, timeout=10, **kwargs)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed")
+    return result.stdout.strip()
+
+
+def query(subject):
+    return json.loads(run("hyprctl", "-j", subject))
+
+
+def dispatch(action, argument):
+    # Named workspaces have negative IDs; stop hyprctl parsing them as flags.
+    answer = run("hyprctl", "--", "dispatch", action, str(argument))
+    if answer != "ok":
+        raise RuntimeError(f"{action}: {answer}")
+
+
+def fresh_state():
+    return {
+        "current": "current", "previous": None,
+        "sets": {name.lower(): {"name": name} for name in ("Current", "School", "Hobbies", "Fun")},
+    }
+
+
+def save(state):
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = STATE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2) + "\n")
+    temporary.replace(STATE)
+
+
+def read_state():
+    if not STATE.exists():
+        return fresh_state()
+    return json.loads(STATE.read_text())
+
+
+def refresh_bar():
+    # Waybar applies ignore-workspaces when populating its buttons, but a rename
+    # alone does not consistently reapply that filter. Reload any running bar;
+    # a deliberately hidden/stopped bar stays stopped.
+    subprocess.run(["systemctl", "--user", "kill", "--signal=SIGUSR2", "--kill-whom=main", "waybar.service"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+@contextmanager
+def locked():
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    with STATE.with_suffix(".lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def restore_view(view):
+    monitors = [m for m in query("monitors") if m["name"] != os.environ.get("IDLE_MONITOR_OUTPUT", "idle")]
+    used = set()
+    for monitor in monitors:
+        slot = view.get("monitors", {}).get(monitor["name"])
+        if slot not in SLOTS or slot in used:
+            preferred = "2" if monitor["name"] == "eDP-1" else "1"
+            slot = next(s for s in [preferred, *sorted(SLOTS)] if s not in used)
+        used.add(slot)
+        dispatch("focusmonitor", monitor["name"])
+        dispatch("focusworkspaceoncurrentmonitor", f"name:{slot}")
+    focused = view.get("focused")
+    if any(m["name"] == focused for m in monitors):
+        dispatch("focusmonitor", focused)
+    # Window addresses are only meaningful during the compositor session.
+    address = view.get("window")
+    if address and any(c["address"] == address and c["workspace"]["name"] in SLOTS for c in query("clients")):
+        dispatch("focuswindow", f"address:{address}")
+
+
+def recover(state):
+    pending = state.get("pending")
+    if not pending:
+        return
+    existing = query("workspaces")
+    originals = dict(pending["renames"])
+    # Empty destination slots created during the failed switch were not in the
+    # original snapshot. Park them before reclaiming the source's public names.
+    for workspace in existing:
+        if workspace["id"] not in originals and workspace["name"] in SLOTS:
+            dispatch("renameworkspace", f'{workspace["id"]} set:{pending["target"]}:{workspace["name"]}')
+    # Return the destination to its private names before unhiding the source.
+    for workspace_id, original_name in sorted(pending["renames"], key=lambda item: item[1] in SLOTS):
+        if any(w["id"] == workspace_id for w in existing):
+            dispatch("renameworkspace", f"{workspace_id} {original_name}")
+    restore_view(state["sets"][state["current"]])
+    del state["pending"]
+    save(state)
+    refresh_bar()
+
+
+def load():
+    state = read_state()
+    session = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    if not session:
+        raise RuntimeError("Run this inside your Hyprland session")
+    if state.get("session") != session:
+        # Keep names across logins, but never reuse old window addresses or a
+        # transaction from a previous compositor instance.
+        for item in state["sets"].values():
+            for key in ("monitors", "focused", "window"):
+                item.pop(key, None)
+        state.pop("pending", None)
+        state["session"] = session
+        state["previous"] = None
+        save(state)
+    recover(state)
+    return state
+
+
+def switch(state, target):
+    current = state["current"]
+    if target == current:
+        return
+    workspaces = query("workspaces")
+    monitors = query("monitors")
+    state["sets"][current].update({
+        "monitors": {m["name"]: m["activeWorkspace"]["name"] for m in monitors
+                     if m["activeWorkspace"]["name"] in SLOTS},
+        "focused": next((m["name"] for m in monitors if m["focused"]), None),
+        "window": query("activewindow").get("address"),
+    })
+    renames = []
+    for workspace in workspaces:
+        name = workspace["name"]
+        parked = PARKED.fullmatch(name)
+        if name in SLOTS:
+            renames.append((workspace["id"], name, f"set:{current}:{name}"))
+        elif parked and parked[1] == target:
+            renames.append((workspace["id"], name, parked[2]))
+    # Journal before touching Hyprland. A failed or interrupted switch can be
+    # rolled back on the next command without losing a window or its layout.
+    state["pending"] = {"target": target, "renames": [[wid, before] for wid, before, _ in renames]}
+    save(state)
+    try:
+        # Free all public slot names before restoring the destination's names.
+        renames.sort(key=lambda item: item[1] not in SLOTS)
+        for wid, _, after in renames:
+            dispatch("renameworkspace", f"{wid} {after}")
+        restore_view(state["sets"][target])
+    except Exception:
+        recover(state)
+        raise
+    state["current"], state["previous"] = target, current
+    del state["pending"]
+    save(state)
+    refresh_bar()
+
+
+def find_set(state, name):
+    for key, item in state["sets"].items():
+        if item["name"].casefold() == name.casefold():
+            return key
+    raise RuntimeError(f"No workspace set named {name!r}")
+
+
+def valid_name(name):
+    name = name.strip()
+    if not name or len(name) > 60 or any(not c.isprintable() for c in name):
+        raise RuntimeError("Use a name of 1–60 printable characters")
+    return name
+
+
+def choose(prompt, rows, custom=False):
+    menu = str(Path.home() / ".local/bin/rofi-menu")
+    result = subprocess.run(
+        [menu, "-dmenu", "-i", "-p", prompt, *([] if custom else ["-no-custom"])],
+        input="\n".join(rows), text=True, capture_output=True,
+    )
+    if result.returncode == 1:
+        return None
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "Workspace menu failed")
+    return result.stdout.strip() or None
+
+
+def menu():
+    # Do not hold the mutation lock while the user is choosing.
+    with locked():
+        state = load()
+        counts = dict.fromkeys(state["sets"], 0)
+        for client in query("clients"):
+            name = client["workspace"]["name"]
+            parked = PARKED.fullmatch(name)
+            key = state["current"] if name in SLOTS else parked[1] if parked else None
+            if key in counts and client.get("mapped", True):
+                counts[key] += 1
+        choices = {f'{"●" if key == state["current"] else "○"}  {item["name"]}  ·  {counts[key]} windows': key
+                   for key, item in state["sets"].items()}
+    new, rename = "+  New workspace set…", "✎  Rename current set…"
+    answer = choose("Workspace sets", [*choices, new, rename])
+    if answer is None:
+        return
+    if answer in (new, rename):
+        name = choose("New set name" if answer == new else "Rename current set", [], custom=True)
+        if name:
+            mutate("create" if answer == new else "rename", name)
+    else:
+        mutate("select", choices[answer])
+
+
+def mutate(action, name=None):
+    with locked():
+        state = load()
+        if action == "create":
+            name = valid_name(name)
+            if any(item["name"].casefold() == name.casefold() for item in state["sets"].values()):
+                raise RuntimeError(f"A set named {name!r} already exists; use switch")
+            target = uuid.uuid4().hex[:12]
+            state["sets"][target] = {"name": name}
+            switch(state, target)
+        elif action == "rename":
+            name = valid_name(name)
+            if any(key != state["current"] and item["name"].casefold() == name.casefold()
+                   for key, item in state["sets"].items()):
+                raise RuntimeError(f"A set named {name!r} already exists")
+            state["sets"][state["current"]]["name"] = name
+            save(state)
+        elif action == "back":
+            if not state["previous"]:
+                raise RuntimeError("No previous set yet; choose one with Super+E")
+            switch(state, state["previous"])
+        else:
+            switch(state, name if action == "select" else find_set(state, name))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="action", required=True)
+    for action in ("menu", "back", "status", "list"):
+        commands.add_parser(action)
+    for action in ("create", "switch", "rename"):
+        commands.add_parser(action).add_argument("name")
+    args = parser.parse_args()
+    if args.action not in ("list", "status"):
+        subprocess.run([str(Path.home() / ".local/bin/desktop-which-key"), "hold-end"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    if args.action == "menu":
+        menu()
+    elif args.action == "status":
+        state = read_state()
+        name = state["sets"][state["current"]]["name"]
+        print(json.dumps({"text": html.escape(name), "tooltip": "Workspace set: " + html.escape(name)
+                          + "\nSuper+E: choose/create · Super+Shift+E: previous"}))
+    elif args.action == "list":
+        state = read_state()
+        for key, item in state["sets"].items():
+            print(("* " if key == state["current"] else "  ") + item["name"])
+    else:
+        mutate(args.action, getattr(args, "name", None))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
+        print(f"workspace-set: {error}", file=sys.stderr)
+        subprocess.run(["notify-send", "Workspace sets", str(error)], check=False)
+        sys.exit(1)

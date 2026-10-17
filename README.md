@@ -1,6 +1,24 @@
 # dotfiles
 Dotfiles to save/share the config files
 
+Focus a Firefox upload input, then use **Super+Alt+F** (`filepick`), select files,
+and press **Enter** to attach them automatically. Press `Esc`, then `d` to drag
+instead. **Super+Alt+D** reopens the last selection for dragging.
+See [Filepick keys and usage](docs/filepick.md).
+
+Use **Super+Ctrl+Z** (`pdfpick`) to fuzzy-find PDFs and open them in Zathura.
+Switch between all PDFs, recent downloads, and recent opens; filter by folder
+and preview paper text. See [PDF picker keys and usage](docs/pdfpick.md).
+
+Hold **Super** to see shortcuts. **Super+Esc** pins the Rust key map: `/` searches
+keys and descriptions, `?` shows help. Groups: **Super+G** websites, **Super+A**
+audio, **Super+X** pointer tools, **Super+T** desktop, **Super+C** Codex.
+See [Desktop key map and moved shortcuts](docs/desktop-which-key-prd.md).
+
+Choose a shared app theme with **Super+T → C**, a wallpaper with **Super+T → W**,
+or cycle matching wallpapers with **Super+T → V**. Six palettes include 18 original
+4K backgrounds. See [Themes and wallpapers](docs/themes.md).
+
 ## Mobile-dev automatic app updates
 
 `nixos/data/queue-deployments.json` is the app deployment registry used by Codex

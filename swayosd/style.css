@@ -1,3 +1,5 @@
+@import "../dotfiles-theme/current/colors.css";
+
 window#osd {
   border-radius: 999px;
   border: none;
@@ -44,11 +46,11 @@ window#osd segment.active {
 
 window#osd image.overamplified,
 window#osd label.overamplified {
-  color: #ef4444;
+  color: @error;
 }
 
 window#osd progressbar.overamplified progress {
-  background: #ef4444;
+  background: @error;
 }
 
 window#osd segment {

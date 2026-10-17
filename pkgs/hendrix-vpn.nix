@@ -3,12 +3,22 @@
     mkdir -p $out/hendrix
     cp ${../scripts/hendrix}/{__init__,core,vpn}.py $out/hendrix/
   '';
-in
-  pkgs.writeShellApplication {
+  vpn = pkgs.writeShellApplication {
     name = "hendrix-vpn";
-    runtimeInputs = [pkgs.openconnect pkgs.openresolv pkgs.tailscale pkgs.libsecret pkgs.systemd pkgs.glibc.bin pkgs.coreutils];
+    runtimeInputs = [pkgs.openconnect pkgs.libsecret pkgs.systemd pkgs.glibc.bin pkgs.coreutils pkgs.zbar];
     text = ''
       export PYTHONPATH=${source}
       exec ${pkgs.python313}/bin/python3 -m hendrix.vpn "$@"
     '';
+  };
+  askpass = pkgs.writeShellApplication {
+    name = "hendrix-ssh-askpass";
+    text = ''
+      exec ${vpn}/bin/hendrix-vpn --ssh-askpass "$@"
+    '';
+  };
+in
+  pkgs.symlinkJoin {
+    name = "hendrix-desktop-login";
+    paths = [vpn askpass];
   }

@@ -11,6 +11,7 @@
   "spacing": 0,
   "height": 26,
   "modules-left": [
+    "custom/workspace-set",
     "hyprland/workspaces",
     "custom/idle-workspace"
   ],
@@ -27,6 +28,9 @@
     "battery"
   ],
   "hyprland/workspaces": {
+    "ignore-workspaces": ["^set:.*"],
+    "sort-by": "name",
+    "enable-bar-scroll": false,
     "on-click": "activate",
     "format": "{name}",
     "format-icons": {
@@ -43,6 +47,14 @@
       "10": "0",
       "active": "󱓻"
     },
+  },
+  "custom/workspace-set": {
+    "exec": "$HOME/.local/bin/workspace-set status",
+    "return-type": "json",
+    "interval": 3,
+    "on-click": "$HOME/.local/bin/workspace-set menu",
+    "on-click-right": "$HOME/.local/bin/workspace-set back",
+    "format": "{}"
   },
   "custom/idle-workspace": {
     "exec": "$HOME/.local/bin/idle-workspace-status",
