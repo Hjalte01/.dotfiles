@@ -28,6 +28,7 @@
       - This machine is the `mobile-dev` VPS, intended for phone-driven remote Codex work.
       - Its NixOS configuration is `nixos/mobile-dev.nix` and its flake target is `mobile-dev`.
       - Keep VPS-specific system and Home Manager changes in the mobile-dev modules.
+      - After completing and verifying a task in any Git repository on this VPS, commit its owned changes and push the current branch to its configured upstream automatically. When Codex Queue owns the run, leave pull/commit/push to its Git lifecycle. Preserve partial or unrelated edits and report blocked synchronization instead of forcing it.
     ''
     else ''
       ## This Host
@@ -35,6 +36,7 @@
       - This machine is the main PC (`${hostName}`), not the mobile VPS.
       - Its NixOS configuration is `nixos/configuration.nix` and its flake target is `nixos`.
       - Keep desktop-specific system and Home Manager changes in the desktop modules.
+      - On this main PC, automatic task-completion commit/push is enabled only for `/home/hjalte/Documents/other/side_projects/roblox_gamemodes` and that repository's worktrees (Git remote `Hjalte01/roblox-gamemodes`). Other PC repositories keep their existing push behavior; do not automatically commit/push them unless explicitly requested. In the Roblox repository, publish only completed, verified, owned work once no other task is editing the checkout.
     '';
 in {
   home.username = "hjalte";
@@ -116,6 +118,14 @@ in {
       - After changing NixOS, Home Manager, Neovim, shell, Hyprland, or other dotfiles that are activated through the flake, run `nxb` before finishing so the live system matches the repository. If the user explicitly says not to run `nxb` or gives a conflicting instruction, follow the user's latest explicit instruction instead.
 
       ${hostContext}
+
+      ## Git synchronization
+
+      - Before editing or testing in a Git repository, inspect its branch/upstream, tracked and untracked changes, unfinished Git operations and other active tasks using the checkout. Repeat after work may have arrived from another device.
+      - If the checkout is clean and idle, fetch the configured upstream with a bounded timeout and automatically pull available fast-forward updates using `git pull --ff-only --no-rebase --no-autostash`. Re-read instructions and relevant files after updating. An up-to-date or purely ahead branch needs no pull.
+      - Preserve dirty or concurrently used checkouts. Never stash, discard, reset, force-push, rebase, switch branches or auto-commit unrelated work to enable synchronization. Report a missing/ambiguous upstream, divergence or a network failure accurately.
+      - Automatic completion commit/push follows the host-specific scope below. Commit only the completed task's files after verification; never use blanket staging in a shared dirty checkout. Use a normal non-force push to the current branch's configured upstream and verify its remote commit. Retain local work and report a rejected/failed push. A failed or cancelled task does not authorize publishing partial work.
+      - When a queue or controller owns Git operations, respect its locks and lifecycle; do not race a second pull or push from inside the model task.
 
       ## Shared Context Locations
 
