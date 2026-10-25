@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+reset_group() {
+  hyprctl dispatch submap reset >/dev/null
+  "$HOME/.local/bin/desktop-which-key" end-context >/dev/null 2>&1 || true
+}
+case "${1:-}" in
+  enter)
+    case "${2:-}" in pointer|desktop|codex|system) ;; *) exit 2 ;; esac
+    hyprctl dispatch submap "$2" >/dev/null
+    "$HOME/.local/bin/desktop-which-key" context "$2" >/dev/null 2>&1 || true
+    ;;
+  run)
+    shift
+    reset_group
+    exec "$@"
+    ;;
+  cancel) reset_group ;;
+  *) exit 2 ;;
+esac

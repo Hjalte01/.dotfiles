@@ -217,6 +217,9 @@
     '';
   };
 
+  windowOverview = pkgs.callPackage ../pkgs/window-overview.nix {};
+  desktopWhichKey = pkgs.callPackage ../pkgs/desktop-which-key.nix {};
+
   outputPriority = pkgs.writeShellApplication {
     name = "output-priority";
     runtimeInputs = [
@@ -237,10 +240,17 @@
 in {
   imports = [
     ./common.nix
+    ./dictation.nix
   ];
 
+  dotfiles.theme.desktop.enable = true;
+  dotfiles.theme.desktop.swayosdPackage = swayosdOveramplified;
+
   services.easyeffects.enable = true;
-  services.handy.enable = true;
+  services.swayosd = {
+    enable = true;
+    package = swayosdOveramplified;
+  };
 
   # Packages you want installed just for your user
   home.packages = with pkgs; [
@@ -248,6 +258,7 @@ in {
     stdenv.cc.cc.lib # Runtime libstdc++ for Python ML wheels
     zlib # Runtime zlib for Python ML wheels
     wl-clipboard # Clipboard support
+    dragon-drop # Drag filepick selections into browser upload areas
     wtype # Wayland text insertion for Handy dictation
     cliphist # Clipboard history
     file # Detect text/image types for Codex clipboard history captures
@@ -280,7 +291,7 @@ in {
     (pkgs.callPackage ../pkgs/talon.nix {})
 
     ghostty # Terminal
-    python311
+    (python313.withPackages (ps: [ps.torch])) # Python runtime and Pyright share PyTorch
     pix2tex # Math OCR without runtime pip installs
     xdg-utils # Provides xdg-open for the open alias
     glib # Provides gio for the fuzzy "Open with" launcher
@@ -290,7 +301,8 @@ in {
     # --- hypr window-manager ---
     waybar
     rofi
-    quickshell
+    desktopWhichKey
+    windowOverview
     hyprsunset
 
     # For your custom scripts
@@ -362,13 +374,8 @@ in {
     # 3. Rofi (Single File)
     ".config/rofi/config.rasi".source = makeLink "rofi/config.rasi" ../rofi/config.rasi;
 
-    ".config/quickshell/keybind-hints" = {
-      source = makeLink "quickshell/keybind-hints" ../quickshell/keybind-hints;
-      recursive = true;
-    };
-
     # 4. Mako notifications
-    ".config/mako/config".source = makeLink "mako/config" ../mako/config;
+    ".config/mako/base.conf".source = makeLink "mako/config" ../mako/config;
 
     ".config/swayosd/config.toml".source = makeLink "swayosd/config.toml" ../swayosd/config.toml;
     ".config/swayosd/style.css".source = makeLink "swayosd/style.css" ../swayosd/style.css;
@@ -385,7 +392,11 @@ in {
     };
 
     ".local/bin/desktop-which-key" = {
-      source = makeLink "scripts/desktop-which-key" ../scripts/desktop-which-key;
+      source = "${desktopWhichKey}/bin/desktop-which-key";
+    };
+
+    ".local/bin/keybind-group" = {
+      source = makeLink "scripts/keybind-group" ../scripts/keybind-group;
       executable = true;
     };
 
@@ -394,9 +405,18 @@ in {
       executable = true;
     };
 
+    ".local/bin/latest-download" = {
+      source = makeLink "scripts/latest-download" ../scripts/latest-download;
+      executable = true;
+    };
+
     ".local/bin/rofi-menu" = {
       source = makeLink "scripts/rofi-menu" ../scripts/rofi-menu;
       executable = true;
+    };
+
+    ".local/bin/window-overview" = {
+      source = "${windowOverview}/bin/window-overview";
     };
 
     ".local/bin/audio-shortcuts" = {
@@ -444,6 +464,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/workspace-set" = {
+      source = makeLink "scripts/workspace-set" ../scripts/workspace-set;
+      executable = true;
+    };
+
     ".local/bin/system-menu" = {
       source = makeLink "scripts/system-menu" ../scripts/system-menu;
       executable = true;
@@ -476,11 +501,6 @@ in {
 
     ".local/bin/app-audio-mute" = {
       source = makeLink "scripts/app-audio-mute" ../scripts/app-audio-mute;
-      executable = true;
-    };
-
-    ".local/bin/handy-toggle" = {
-      source = makeLink "scripts/handy-toggle" ../scripts/handy-toggle;
       executable = true;
     };
 
@@ -520,6 +540,16 @@ in {
 
     ".local/bin/clipboard-history" = {
       source = makeLink "scripts/clipboard-history" ../scripts/clipboard-history;
+      executable = true;
+    };
+
+    ".local/bin/filepick-menu" = {
+      source = makeLink "scripts/filepick-menu" ../scripts/filepick-menu;
+      executable = true;
+    };
+
+    ".local/bin/pdfpick-menu" = {
+      source = makeLink "scripts/pdfpick-menu" ../scripts/pdfpick-menu;
       executable = true;
     };
 
@@ -705,15 +735,29 @@ in {
     Install.WantedBy = ["default.target"];
   };
 
+  systemd.user.services.window-overview = {
+    Unit = {
+      Description = "Native Rust workspace and window overview";
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+    Service = {
+      ExecStart = "${windowOverview}/bin/window-overview --daemon";
+      Restart = "on-failure";
+      RestartSec = 1;
+    };
+    Install.WantedBy = ["graphical-session.target"];
+  };
+
   systemd.user.services.keybind-hints = {
     Unit = {
-      Description = "Desktop which-key overlay";
+      Description = "Rust desktop which-key overlay";
       PartOf = ["graphical-session.target"];
       After = ["graphical-session.target"];
     };
 
     Service = {
-      ExecStart = "${pkgs.quickshell}/bin/qs -n -c keybind-hints";
+      ExecStart = "${desktopWhichKey}/bin/desktop-which-key --daemon";
       Restart = "on-failure";
       RestartSec = 1;
     };

@@ -1,2 +1,4 @@
 set selection-clipboard clipboard
 set guioptions ""
+
+include ../dotfiles-theme/current/zathurarc

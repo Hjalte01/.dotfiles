@@ -1,3 +1,5 @@
+@import "../dotfiles-theme/current/colors.css";
+
 
 * {
   background-color: @background;
@@ -12,6 +14,11 @@
 
 .modules-left {
   margin-left: 8px;
+}
+
+#custom-workspace-set {
+  color: @accent;
+  padding: 0 10px 0 4px;
 }
 
 .modules-right {
@@ -32,7 +39,7 @@
 }
 
 #custom-idle-workspace.idle-active {
-  color: #00d7ff;
+  color: @accent;
   font-weight: bold;
 }
 
@@ -90,7 +97,7 @@ tooltip {
 }
 
 #custom-screenrecording-indicator.active {
-  color: #a55555;
+  color: @error;
 }
 
 #custom-voxtype {
@@ -99,7 +106,7 @@ tooltip {
 }
 
 #custom-voxtype.recording {
-  color: #a55555;
+  color: @error;
 }
 
 /* OMARCHY-SUPPLEMENT-TRANSPARENCY */
@@ -110,30 +117,30 @@ tooltip {
 menu,
 popover,
 tooltip {
-    background-color: #1e1e2e;
-    color: #cdd6f4;
-    border: 1px solid rgba(205, 214, 244, 0.25);
+    background-color: @background;
+    color: @foreground;
+    border: 1px solid alpha(@foreground, 0.25);
     border-radius: 6px;
 }
 
 menu menuitem,
 popover * {
-    background-color: #1e1e2e;
-    color: #cdd6f4;
+    background-color: @background;
+    color: @foreground;
 }
 
 menu menuitem:hover {
-    background-color: #313244;
+    background-color: @surface;
 }
 
 #workspaces button.active {
-    border: 1px solid #ffffff;
+    border: 1px solid @accent;
     border-radius: 50%;
 }
 
 #custom-devmode {
-    background-color: #cba6f7;
-    color: #1e1e2e;
+    background-color: @accent;
+    color: @background;
     font-weight: bold;
     border-radius: 6px;
     padding: 0 10px;

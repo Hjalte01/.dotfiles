@@ -1,6 +1,8 @@
 # Coherent desktop keybindings PRD
 
-Status: implemented and activated on 2026-08-06 after approval of the Go sequence.
+Status: historical design, implemented on 2026-08-06. The current Rust overlay,
+additional groups, and October 2026 shortcut moves are documented in
+[Desktop which-key](desktop-which-key-prd.md).
 
 ## Problem
 
@@ -141,6 +143,8 @@ means the larger-scope variant.
 
 - `Super+H/J/K/L` focuses; adding Shift swaps; adding Alt resizes.
 - `Super+1..0` changes workspace; adding Shift moves the window.
+- `Super+E` chooses or creates a workspace set; `Super+Shift+E` returns to the
+  previous set. Workspaces 1–9 belong to the current set; idle workspace 0 is shared.
 - `Super+Space` opens the launcher; Shift opens its fullscreen variant; Ctrl toggles
   Waybar.
 - `Super+V` opens clipboard history; Shift makes it fullscreen; Ctrl captures the

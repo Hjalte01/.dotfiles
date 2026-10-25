@@ -58,10 +58,10 @@ def main():
     parser = argparse.ArgumentParser(prog='hendrix', description=__doc__)
     parser.add_argument('--project', help='Saved project name (defaults to first project)')
     parser.add_argument('action', nargs='?', default='ssh',
-                        choices=['tui', 'up', 'down', 'status', 'password', 'ssh', 'connect', 'setup-ssh', 'profiles', 'reconcile', 'resolve'])
+                        choices=['tui', 'up', 'down', 'status', 'password', 'totp', 'ssh', 'connect', 'setup-ssh', 'shell-setup', 'profiles', 'reconcile', 'resolve'])
     args, extra = parser.parse_known_args()
     try:
-        if args.action in ('up', 'down', 'status', 'password'):
+        if args.action in ('up', 'down', 'status', 'password', 'totp'):
             vpn(args.action, extra)
             return 0
         if args.action == 'profiles':
@@ -96,6 +96,9 @@ def main():
             setup_ssh(backend)
         else:
             connect(backend)
+            if args.action == 'shell-setup':
+                from .shell import install_shell
+                install_shell(backend)
             if args.action == 'ssh':
                 return subprocess.run(backend.ssh_argv(batch=False) + extra).returncode
     except (Error, OSError, ValueError, subprocess.SubprocessError) as exc:

@@ -8,7 +8,7 @@ trap 'rm -f "$details"' EXIT
 
 HYPRLAND_CONFIG="$config" "$repo_root/scripts/custom-keybinds" --dump > "$details"
 
-duplicates="$(cut -f3 "$details" | sort | uniq -d)"
+duplicates="$(cut -f3 "$details" | tr '[:upper:]' '[:lower:]' | sort | uniq -d)"
 if [[ -n "$duplicates" ]]; then
   printf 'Duplicate keybindings:\n%s\n' "$duplicates" >&2
   exit 1
@@ -36,6 +36,10 @@ actual_sequences="$(cut -f3 "$details" | awk '/^Super\+G → [A-Z]$/ { count++ }
 if [[ "$actual_sequences" -ne "$expected_sequences" ]]; then
   printf 'Expected %d web sequences, found %d\n' "$expected_sequences" "$actual_sequences" >&2
   exit 1
+fi
+
+if command -v desktop-which-key >/dev/null 2>&1 && desktop-which-key --list >/dev/null 2>&1; then
+  HYPRLAND_CONFIG="$config" desktop-which-key --check
 fi
 
 printf 'Keybind validation passed: no duplicates, no three-modifier chords, %d web sequences.\n' "$actual_sequences"

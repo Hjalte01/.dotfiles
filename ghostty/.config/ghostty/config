@@ -1,4 +1,7 @@
 
+# Shared runtime palette
+config-file = ?../dotfiles-theme/current/ghostty.conf
+
 # Font
 font-family = "JetBrainsMono Nerd Font"
 font-style = Regular

@@ -1,0 +1,20 @@
+[package]
+name = "system-theme"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+libc = "0.2"
+serde_json = { version = "1", features = ["preserve_order"] }
+gtk = { version = "0.18", optional = true }
+gtk-layer-shell = { version = "0.8", features = ["v0_6"], optional = true }
+
+[features]
+default = ["desktop"]
+desktop = ["dep:gtk", "dep:gtk-layer-shell"]
+
+[profile.release]
+lto = "thin"
+strip = true

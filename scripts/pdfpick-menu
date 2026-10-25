@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec ghostty --class=local.pdfpick --title="PDF picker" -e pdfpick "$@"

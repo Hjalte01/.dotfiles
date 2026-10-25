@@ -89,7 +89,18 @@ in {
     pkgs.networkmanager-openconnect
   ];
   programs.nm-applet.enable = true;
+  # Keep Wi-Fi/KU VPN DNS and Tailscale MagicDNS on their own links. This also
+  # connects NetworkManager to resolved and enables its local DNS stub.
+  services.resolved.enable = true;
+  # Avahi already provides multicast DNS for desktop network discovery.
+  services.resolved.settings.Resolve.MulticastDNS = "no";
+  # The tailnet's broader ts.net split-DNS route points at public resolvers.
+  # Keep our private names on MagicDNS with a more specific routing domain,
+  # independent of the DNS servers installed by Tailscale or the KU VPN.
+  services.resolved.settings.Resolve.DNS = ["100.100.100.100"];
+  services.resolved.settings.Resolve.Domains = ["~tail55f864.ts.net"];
   services.tailscale.enable = true;
+  services.tailscale.extraSetFlags = ["--accept-dns=true"];
   services.breakd.enable = true;
 
   # Set your time zone.

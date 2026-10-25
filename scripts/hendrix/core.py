@@ -11,6 +11,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 import uuid
@@ -125,8 +126,56 @@ def save_profiles(profiles, path=None):
                 dict(version=1, projects=[dataclasses.asdict(p.validate()) for p in profiles]))
 
 
+def launch_key(profile, preset):
+    return json.dumps([profile.host, profile.name, profile.local, profile.remote,
+                       preset['script'], preset.get('args', [])])
+
+
+def load_launch_settings():
+    path = CONFIG / 'launch-settings.json'
+    if not path.exists():
+        return {'last_presets': {}, 'requests': {}, 'guidance': {}}
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict) or any(not isinstance(data.get(k), dict)
+                                              for k in ('last_presets', 'requests')):
+            raise ValueError('expected last_presets and requests objects')
+        if any(not isinstance(value, str) for value in data['last_presets'].values()):
+            raise ValueError('expected saved preset keys to be strings')
+        for requests in data['requests'].values():
+            if not isinstance(requests, list) or not requests:
+                raise ValueError('expected a nonempty list of GPU requests')
+            for request in requests:
+                if not isinstance(request, dict) or any(type(request.get(k)) is not int
+                                                       for k in ('gpus', 'cpus')):
+                    raise ValueError('expected integer GPU and CPU counts')
+                validate_resources(request)
+        guidance = data.setdefault('guidance', {})
+        if not isinstance(guidance, dict):
+            raise ValueError('expected guidance object')
+        for value in guidance.values():
+            if not isinstance(value, dict):
+                raise ValueError('expected memory guidance object')
+            minimum_vram(value.get('minimum_vram', ''))
+        return data
+    except (ValueError, TypeError, KeyError, Error) as exc:
+        raise Error(f'Invalid launch settings {path}: {exc}') from exc
+
+
+def remember_launch(profile, preset, requests, minimum_vram_gb=''):
+    settings = load_launch_settings()
+    for request in requests:
+        validate_resources(request)
+    key = launch_key(profile, preset)
+    settings['requests'][key] = requests
+    minimum_vram(minimum_vram_gb)
+    settings['guidance'][key] = {'minimum_vram': str(minimum_vram_gb)}
+    settings['last_presets'][launch_key(profile, {'script': '', 'args': []})] = key
+    atomic_json(CONFIG / 'launch-settings.json', settings)
+
+
 def fields(line: str) -> dict[str, str]:
-    matches = list(re.finditer(r'(?:^|\s)([A-Za-z][A-Za-z0-9_]*)=', line))
+    matches = list(re.finditer(r'(?:^|\s)([A-Za-z][A-Za-z0-9_/:]*)=', line))
     return {m[1]: line[m.end():matches[i + 1].start() if i + 1 < len(matches) else len(line)].strip()
             for i, m in enumerate(matches)}
 
@@ -134,7 +183,7 @@ def fields(line: str) -> dict[str, str]:
 def gpu_counts(value: str) -> dict[str, int]:
     # Slurm appends topology / allocated index annotations to typed GRES.
     return {m[1] or 'untyped': int(m[2]) for m in re.finditer(
-        r'(?:^|,)gpu:(?:([^:,()]+):)?(\d+)(?:\([^)]*\))?', value)}
+        r'(?:^|,)gpu:(?:([^:,()\s]+):)?(\d+)(?:\([^)]*\))?', value)}
 
 
 def tres(value: str) -> dict[str, str]:
@@ -301,6 +350,57 @@ def gpu_request(model, node=None):
     return '\n'.join(lines) + '\n'
 
 
+TERMINAL_JOB_STATES = {'COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL',
+                       'OUT_OF_MEMORY', 'PREEMPTED', 'BOOT_FAIL', 'DEADLINE',
+                       'REVOKED', 'SPECIAL_EXIT', 'FINISHED'}
+
+
+def job_is_active(job):
+    # Unknown/transitional states stay visible rather than disappearing from active monitoring.
+    state = job['state'].split()[0].rstrip('+')
+    return state not in TERMINAL_JOB_STATES
+
+
+def visible_jobs(jobs, mode='recent', limit=3):
+    if limit < -1:
+        raise Error('Recent finished count must be -1 (all), zero, or positive.')
+    number = lambda job: tuple(int(v) for v in re.findall(r'\d+', job['id']))
+    active = sorted((j for j in jobs if job_is_active(j)), key=number, reverse=True)
+    finished = sorted((j for j in jobs if not job_is_active(j)),
+                      key=lambda j: (j.get('end') or '', number(j)), reverse=True)
+    if mode == 'active':
+        return active
+    if mode == 'all':
+        return active + finished
+    if mode == 'completed':
+        finished = [j for j in finished if j['state'].split()[0].rstrip('+') == 'COMPLETED']
+    elif mode not in ('recent', 'finished'):
+        raise Error('Unknown jobs view.')
+    if limit >= 0:
+        finished = finished[:limit]
+    return (active if mode == 'recent' else []) + finished
+
+
+def compact_job_gpu(value):
+    typed = re.findall(r'gres/gpu:([^,=]+)=(\d+)', value)
+    if typed:
+        return ', '.join(f'gpu:{model}:{count}' for model, count in typed)
+    count = re.search(r'(?:^|,)gres/gpu=(\d+)', value)
+    return f'gpu:any:{count[1]}' if count else value
+
+
+def validate_run_name(value):
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,95}', value):
+        raise Error('Run name: 1–96 letters, digits, dots, underscores or hyphens; start with a letter/digit.')
+    return value
+
+
+def default_run_name(profile, preset, at=None):
+    slug = lambda text: re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-') or 'run'
+    stamp = (at or dt.datetime.now().astimezone()).strftime('%Y%m%d-%H%M%S')
+    return f'{slug(profile.name)[:32]}--{slug(preset["name"])[:32]}--{stamp}'
+
+
 def parse_queue(output):
     jobs = []
     for line in output.splitlines():
@@ -319,8 +419,268 @@ def parse_accounting(output):
         if len(b) >= 8 and re.fullmatch(r'\d+(?:_\d+)?', b[0]):
             job, name, state, elapsed, limit, nodes, resources, exitcode = b[:8]
             jobs.append(dict(id=job, name=name, state=state, elapsed=elapsed, limit=limit,
-                             reason=nodes, gpu=resources, exit=exitcode, partition=''))
+                             reason=nodes, gpu=resources, exit=exitcode, partition='',
+                             end=b[8] if len(b) > 8 and b[8] != 'Unknown' else None))
     return jobs
+
+
+# Nominal manufacturer specifications, not measured/installed VRAM or connectivity.
+# Do not guess the identity of Hendrix's quatrortx/titan/titanx aliases.
+GPU_SPECS = {
+    'l40s': ((48,), 'https://www.nvidia.com/en-in/data-center/l40s/'),
+    'a40': ((48,), 'https://images.nvidia.com/content/Solutions/data-center/a40/nvidia-a40-datasheet.pdf'),
+    'a100': ((40, 80), 'https://www.nvidia.com/en-us/data-center/a100/'),
+    'h100': ((80, 94), 'https://www.nvidia.com/en-us/data-center/h100/'),
+    'titanrtx': ((24,), 'https://developer.nvidia.com/titan-rtx'),
+}
+
+
+def minimum_vram(value):
+    if value is None or str(value).strip() == '':
+        return None
+    if not re.fullmatch(r'\d+(?:\.\d+)?', str(value).strip()) or not 0 < float(value) <= 10000:
+        raise Error('Minimum VRAM per GPU should be a positive number of nominal GB, or blank.')
+    return float(value)
+
+
+def gpu_metadata(model, minimum=None):
+    variants, source = GPU_SPECS.get(model.lower(), ((), ''))
+    minimum = minimum_vram(minimum)
+    assessment = 'unknown'
+    if minimum is not None and variants:
+        assessment = ('likely fits by specification' if minimum <= min(variants) else
+                      'too small' if minimum > max(variants) else 'variant uncertain')
+    return dict(vram='/'.join(str(v) for v in variants) + ' GB' if variants else 'unknown',
+                variants=variants, source=source, assessment=assessment)
+
+
+def slurm_time(value):
+    """Queries explicitly set TZ=UTC; convert using the user's local timezone."""
+    try:
+        parsed = dt.datetime.fromisoformat(value.strip())
+        return parsed.replace(tzinfo=dt.timezone.utc).astimezone() if parsed.tzinfo is None else parsed.astimezone()
+    except (AttributeError, ValueError):
+        return None
+
+
+def display_time(value):
+    return value.strftime('%d %b %H:%M %Z') if value else 'unavailable'
+
+
+def array_size(expression):
+    """Count disjoint compact ranges arithmetically, without expanding tasks.
+
+    Overlaps, truncation and unfamiliar syntax are unknown rather than overcounts.
+    Slurm emits ordered, disjoint ranges, including optional steps and %throttle.
+    """
+    expression = expression.strip().removeprefix('[').removesuffix(']')
+    expression, _, cap = expression.partition('%')
+    throttle = integer(cap) if cap else None
+    if cap and (throttle is None or throttle < 1):
+        return None, None
+    count, previous_end = 0, -1
+    for part in expression.split(','):
+        match = re.fullmatch(r'(\d+)(?:-(\d+)(?::(\d+))?)?', part)
+        if not match:
+            return None, throttle
+        start, end, step = int(match[1]), int(match[2] or match[1]), int(match[3] or 1)
+        if start <= previous_end or end < start or step < 1:
+            return None, throttle
+        count += (end - start) // step + 1
+        previous_end = end
+    return count, throttle
+
+
+def pending_reason(reason):
+    if reason in ('Resources', 'Priority'):
+        return 'waiting', 'Waiting for resources' if reason == 'Resources' else 'Waiting for scheduler priority'
+    if reason in ('Dependency', 'DependencyNeverSatisfied'):
+        return 'blocked', 'Dependency is unsatisfied' if reason == 'Dependency' else 'Dependency cannot succeed'
+    if 'Held' in reason:
+        return 'blocked', 'Held by user or administrator'
+    if reason == 'JobArrayTaskLimit':
+        return 'blocked', 'Array concurrency cap reached'
+    if reason == 'BeginTime':
+        return 'blocked', 'Requested future start time'
+    return 'other', 'Other scheduler condition; see raw reason'
+
+
+def in_partition(row, partition):
+    return partition == '*' or partition in row.get('partitions', row.get('partition', '')).split(',')
+
+
+def parse_cluster_queue(output):
+    """One bulk scontrol query preserves memory scope and array throttles on 20.11."""
+    jobs, warnings = {}, []
+    for line in output.splitlines():
+        if not line.strip() or line.strip() == 'No jobs in the system':
+            continue
+        f = fields(line)
+        if 'JobId' not in f or 'JobState' not in f:
+            warnings.append('Some job records could not be parsed')
+            continue
+        if f['JobState'] != 'PENDING':
+            continue
+        raw_id, expression = f['JobId'], f.get('ArrayTaskId')
+        count, cap = array_size(expression) if expression else (1, None)
+        reported_cap = integer(f.get('ArrayTaskThrottle'))
+        if reported_cap is not None:
+            cap = reported_cap
+        job_id = (f.get('ArrayJobId', raw_id) + '_' +
+                  (expression if expression.isdecimal() else '[' + expression + ']')) if expression else raw_id
+        # Per-node/task/job requests carry the intended type. Controller TRES
+        # may include stale alternative GPU types, so do not merge it into GRES.
+        scoped = [(scope, f.get(key, '')) for scope, key in
+                  [('node', 'TresPerNode'), ('job', 'TresPerJob'), ('task', 'TresPerTask')]]
+        groups = set()
+        requests = []
+        for scope, value in scoped:
+            value = value.split()[0] if value else ''
+            counts = gpu_counts(value)
+            if counts:
+                groups.update('any' if m == 'untyped' else m for m in counts)
+                requests.append(value + '/' + scope)
+        if not groups:
+            counts = gpu_counts(f.get('Gres', ''))
+            if counts:
+                groups.update('any' if m == 'untyped' else m for m in counts)
+                requests.append(f['Gres'])
+            elif 'gres/gpu' in tres(f.get('TRES', '')):
+                groups.add('any')
+                requests.append('Any GPU (type/scope unknown)')
+        category, explanation = pending_reason(f.get('Reason', 'Unknown'))
+        memory = (f['MinMemoryCPU'] + '/CPU' if 'MinMemoryCPU' in f else
+                  f['MinMemoryNode'] + '/node' if 'MinMemoryNode' in f else 'unknown')
+        jobs[job_id] = dict(id=job_id, raw_id=raw_id, partition=f.get('Partition', '?'),
+            gpu=', '.join(requests) or 'No GPU reported', groups=groups, tasks=count, cap=cap,
+            cpus=f.get('NumCPUs', '?'), memory=memory, limit=f.get('TimeLimit', '?'),
+            reason=f.get('Reason', 'Unknown'), category=category, explanation=explanation,
+            submitted=slurm_time(f.get('SubmitTime')), start=slurm_time(f.get('StartTime')))
+        if count is None:
+            warnings.append('Some array task counts are unknown (truncated or unsupported ranges)')
+    return list(jobs.values()), '; '.join(dict.fromkeys(warnings))
+
+
+def pending_demand(jobs, partition='gpu'):
+    result = {}
+    for job in jobs:
+        if not in_partition(job, partition):
+            continue
+        for model in job['groups'] or {'none'}:
+            row = result.setdefault(model, dict(tasks=0, waiting=0, blocked=0, other=0, unknown=False))
+            if job['tasks'] is None:
+                row['unknown'] = True
+            else:
+                row['tasks'] += job['tasks']
+                row[job['category']] += job['tasks']
+    return result
+
+
+def demand_text(row):
+    if row is None:
+        return '0'
+    if row['unknown']:
+        return f"? (known {row['tasks']})"
+    return f"{row['tasks']} ({row['waiting']} wait / {row['blocked']} blocked / {row['other']} other)"
+
+
+def cap_text(job):
+    if job['cap'] is not None:
+        return str(job['cap']) if job['cap'] else 'unlimited'
+    return '?' if '_' in job['id'] else '—'
+
+
+def resource_flags(resources):
+    """The resource overrides are identical for estimates and real submissions."""
+    validate_resources(resources)
+    model = resources['model']
+    return ['--partition=' + resources['partition'],
+            '--gres=gpu:' + (model + ':' if model not in ('any', 'untyped') else '') + str(resources['gpus']),
+            '--cpus-per-task=' + str(resources['cpus']), '--mem=' + resources['memory'],
+            '--time=' + resources['time']]
+
+
+def script_fit_issue(script):
+    """Only claim per-node fit for a simple single-node, single-task request."""
+    simple = {'--nodes', '-N', '--ntasks', '-n', '--ntasks-per-node'}
+    overridden = {'--partition', '-p', '--gres', '--cpus-per-task', '-c', '--mem', '--time', '-t'}
+    # Scheduling/IO directives remain in the script but do not alter this
+    # observed counter comparison. Anything else is conservatively unknown.
+    harmless = {'--account', '-A', '--qos', '-q', '--dependency', '-d', '--begin', '-b',
+                '--deadline', '--hold', '-H', '--job-name', '-J', '--output', '-o', '--error', '-e',
+                '--input', '-i', '--comment', '--chdir', '-D', '--array', '-a', '--export',
+                '--export-file', '--get-user-env', '--mail-type', '--mail-user', '--nice',
+                '--requeue', '--no-requeue', '--open-mode', '--signal', '--wait', '-W'}
+    try:
+        for line in script.splitlines():
+            stripped = line.lstrip()
+            if stripped and not stripped.startswith('#'):
+                break
+            if line.startswith(('#PBS', '#BSUB')):
+                return 'unknown: alternate batch directives'
+            prefix = '#SBATCH' if line.startswith('#SBATCH') else '#SLURM' if line.startswith('#SLURM') else None
+            if prefix is None:
+                continue
+            tokens = shlex.split(line[len(prefix):], comments=True)
+            index = 0
+            while index < len(tokens):
+                token = tokens[index]
+                option, _, value = token.partition('=')
+                if token.startswith('-') and not token.startswith('--') and len(token) > 2:
+                    option, value = token[:2], token[2:]
+                if option not in simple | overridden | harmless:
+                    return 'unknown: script has additional topology/resource constraints (' + option + ')'
+                if option in simple:
+                    if not value and index + 1 < len(tokens):
+                        index += 1
+                        value = tokens[index]
+                    if value != '1':
+                        return 'unknown: script is not a simple single-node, single-task request'
+                elif not value and index + 1 < len(tokens) and not tokens[index + 1].startswith('-'):
+                    index += 1
+                index += 1
+    except ValueError:
+        return 'unknown: script directives could not be parsed'
+    return None
+
+
+def observed_fit(nodes, resources, script):
+    issue = script_fit_issue(script)
+    if issue:
+        return issue
+    candidates = [n for n in nodes if in_partition(n, resources['partition']) and n['eligible']
+                  and resources['model'] in n['capacity']]
+    if not candidates:
+        return 'no healthy inventoried nodes'
+    required = [resources['gpus'], resources['cpus'], memory_mib(resources['memory'])]
+    unknown = False
+    shortages = set()
+    for n in candidates:
+        model = resources['model']
+        used = n['used'][model]
+        available = [max(0, n['capacity'][model] - used) if used is not None else None,
+                     n.get('cpu_free'), n.get('ram_free')]
+        missing = [label for label, have, need in zip(('GPU', 'CPU', 'host RAM'), available, required)
+                   if have is not None and have < need]
+        if not missing:
+            if all(v is not None for v in available):
+                return 'fits on ' + n['name']
+            unknown = True
+        shortages.update(missing)
+    return 'unknown: incomplete node counters' if unknown else 'no observed fit: ' + ', '.join(sorted(shortages))
+
+
+def parse_estimate(output, *, utc=True):
+    epoch = re.search(r'__HENDRIX_START_EPOCH__(\d+)', output)
+    if epoch:
+        try:
+            return dt.datetime.fromtimestamp(int(epoch[1]), dt.timezone.utc).astimezone()
+        except (ValueError, OverflowError, OSError):
+            return None
+    match = re.search(r'(?:start at|start time[=:]?|StartTime=)\s*(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})?)', output, re.I)
+    # Raw fixtures/UTC queries can be parsed directly. Real estimates preserve
+    # the remote timezone for --begin/--deadline and convert there with date.
+    return slurm_time(match[1]) if match and utc else None
 
 
 @contextlib.contextmanager
@@ -341,9 +701,15 @@ class Backend:
         directory = Path.home() / '.ssh' / 'hendrix-control'
         directory.mkdir(parents=True, mode=0o700, exist_ok=True)
         directory.chmod(0o700)
-        self.options = ['-o', 'ControlMaster=auto', '-o', 'ControlPersist=15m',
+        self._options = ['-o', 'ControlMaster=auto', '-o', 'ControlPersist=15m',
                         '-o', f'ControlPath={directory}/%C', '-o', 'ConnectTimeout=8',
                         '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=2']
+        self._gateway_options = []
+        self._log_paths = {}
+
+    @property
+    def options(self):
+        return self._options + self._gateway_options
 
     def ssh_argv(self, command=None, batch=True):
         args = ['ssh', *self.options]
@@ -367,9 +733,62 @@ class Backend:
     def connect(self):
         # Reuse an existing session. Never start an unattended password prompt.
         if subprocess.run(['ssh', *self.options, '-O', 'check', self.profile.host],
-                          capture_output=True).returncode == 0:
+                          capture_output=True, timeout=5).returncode == 0:
             return
-        result = subprocess.run(['ssh', *self.options, '-fN', self.profile.host])
+        options = {}
+        if self.profile.host == 'hendrix':
+            config = subprocess.run(['ssh', '-G', self.profile.host], text=True, capture_output=True,
+                                    check=True, timeout=10)
+            options = dict(line.split(' ', 1) for line in config.stdout.splitlines() if ' ' in line)
+            from .gateway import gateway_options
+            print('Checking Hendrix SSH gateways…', flush=True)
+            self._gateway_options = gateway_options(options)
+        # Prefer configured keys/GSSAPI without reading credentials. Explicit
+        # connect is the only path that may access the desktop keyring.
+        try:
+            if subprocess.run(['ssh', *self.options, '-o', 'BatchMode=yes', '-fN', self.profile.host],
+                              capture_output=True, timeout=20).returncode == 0:
+                return
+        except subprocess.TimeoutExpired as exc:
+            raise Error('SSH session/key authentication timed out. Check your VPN and retry Connect.') from exc
+        helper = shutil.which('hendrix-ssh-askpass') if self.profile.host == 'hendrix' else None
+        if helper:
+            # Never send the shared password to a reconfigured host/account.
+            if (options.get('user') == 'fhz806' and options.get('hostname') in
+                    ('hendrixgate', 'hendrixgate.science.ku.dk')):
+                try:
+                    available = subprocess.run([helper, '--check'], capture_output=True, timeout=25)
+                except (OSError, subprocess.TimeoutExpired):
+                    available = None
+                if available is not None and available.returncode == 0:
+                    print('Connecting to Hendrix SSH using the saved KUnet password…', flush=True)
+                    env = dict(os.environ, SSH_ASKPASS=helper, SSH_ASKPASS_REQUIRE='force')
+                    try:
+                        result = subprocess.run(['ssh', *self.options, '-o', 'BatchMode=no',
+                            '-o', 'PreferredAuthentications=password', '-o', 'PubkeyAuthentication=no',
+                            '-o', 'KbdInteractiveAuthentication=no', '-o', 'NumberOfPasswordPrompts=1',
+                            '-fN', self.profile.host], env=env, stdin=subprocess.DEVNULL,
+                            capture_output=True, text=True, timeout=30)
+                    except subprocess.TimeoutExpired:
+                        # Authentication may have completed just before the timeout.
+                        if subprocess.run(['ssh', *self.options, '-O', 'check', self.profile.host],
+                                          capture_output=True, timeout=5).returncode == 0:
+                            return
+                        print('Saved-password SSH login timed out; switching to a terminal password prompt.', flush=True)
+                    else:
+                        if result.returncode == 0:
+                            return
+                        print('Saved-password SSH login failed; switching to a terminal password prompt.\n'
+                              'Update the saved password later with hendrix password set.', flush=True)
+                        if result.stderr:
+                            print(result.stderr.strip()[-2000:], flush=True)
+                else:
+                    print('Saved SSH password is unavailable; switching to a terminal password prompt.', flush=True)
+        # Do not inherit an askpass helper when the user needs to type a password.
+        # One manual attempt follows the single saved-password attempt.
+        env = dict(os.environ, SSH_ASKPASS_REQUIRE='never')
+        result = subprocess.run(['ssh', *self.options, '-o', 'BatchMode=no',
+                                 '-o', 'NumberOfPasswordPrompts=1', '-fN', self.profile.host], env=env)
         if result.returncode:
             raise Error('SSH login failed. Check your VPN and account access.')
 
@@ -388,13 +807,56 @@ class Backend:
     def nodes(self):
         return parse_nodes(self.remote('scontrol show nodes -d -o'))
 
+    def cluster_queue(self):
+        return parse_cluster_queue(self.remote('TZ=UTC SLURM_BITSTR_LEN=4096 scontrol show jobs -o'))
+
+    def read_script(self, preset):
+        script = relative_path(preset['script'])
+        try:
+            return (Path(self.profile.local).expanduser() / script).read_text()
+        except (OSError, UnicodeError) as exc:
+            raise Error(f'Cannot read local batch script {script}: {exc}') from exc
+
+    def estimate(self, preset, resources, script):
+        # /dev/stdin supports preset arguments on Slurm 20.11, while keeping the
+        # original script (including all scheduling directives) on stdin.
+        flags = ['sbatch', '--test-only', *resource_flags(resources), '/dev/stdin',
+                 *[str(a) for a in preset.get('args', [])]]
+        command = self.root_command() + 'set -eu; cd -- "$root"; if estimate_output=$(' + shlex.join(flags) + ''' 2>&1); then
+estimate_code=0
+else
+estimate_code=$?
+fi
+printf '%s\\n' "$estimate_output"
+estimate_start=$(printf '%s\\n' "$estimate_output" | sed -n 's/.* to start at \\([0-9T:.-]*\\).*/\\1/p' | head -n 1)
+if [ -n "$estimate_start" ]; then
+  if estimate_epoch=$(date -d "$estimate_start" +%s); then
+    printf '__HENDRIX_START_EPOCH__%s\\n' "$estimate_epoch"
+  fi
+fi
+exit "$estimate_code"
+'''
+        at = dt.datetime.now().astimezone()
+        try:
+            response = subprocess.run(self.ssh_argv(command), input=script, capture_output=True,
+                                      text=True, timeout=30)
+            output = (response.stdout + '\n' + response.stderr).strip()[-6000:]
+            start = parse_estimate(output, utc=False) if response.returncode == 0 else None
+            return dict(start=start, at=at, detail=output or 'Scheduler returned no estimate',
+                        error=bool(response.returncode))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return dict(start=None, at=at, detail=str(exc), error=True)
+
     def jobs(self, history=False):
-        command = ('set -e; squeue -h -u "$USER" -O '
-                   '"JobID:0|,Name:0|,State:0|,TimeUsed:0|,TimeLimit:0|,ReasonList:0|,tres-per-node:0|,Partition:0"')
+        # On Hendrix, -O JobID returns internal IDs (e.g. 9444), whereas
+        # accounting uses array-task IDs (9443_0). %i uses the same task IDs;
+        # -r expands pending arrays so each task also has a stable row/count.
+        command = ('set -e; squeue -r -h -u "$USER" -o '
+                   '"%i|%j|%T|%M|%l|%R|%b|%P"')
         if history:
             command += ('; printf "\\n__HENDRIX_HISTORY__\\n"; '
-                        'sacct -X -n -P -u "$USER" --starttime now-2days '
-                        '--format=JobID%64,JobName%128,State%64,Elapsed,Timelimit,NodeList%256,AllocTRES%512,ExitCode '
+                        'sacct -X -n -P -u "$USER" --starttime now-7days '
+                        '--format=JobID%64,JobName%128,State%64,Elapsed,Timelimit,NodeList%256,AllocTRES%512,ExitCode,End '
                         '|| printf "__HENDRIX_ACCOUNTING_UNAVAILABLE__\\n"')
         output = self.remote(command)
         current, _, past = output.partition('__HENDRIX_HISTORY__')
@@ -493,7 +955,7 @@ touch -- "$root/.hendrix/managed-v1"
         if not unresolved:
             return 'No uncertain submissions for this project.'
         output = self.remote('set -e; squeue -h -u "$USER" -o "%i|%k"; '
-                             'sacct -X -n -P -u "$USER" --starttime now-2days '
+                             'sacct -X -n -P -u "$USER" --starttime now-7days '
                              '--format=JobID%64,Comment%128 || true')
         found = {}
         for line in output.splitlines():
@@ -541,7 +1003,8 @@ touch -- "$root/.hendrix/managed-v1"
         self.record(record)
         return 'Submission resolved: ' + record['status']
 
-    def submit(self, preset: dict, resources: dict):
+    def submit(self, preset: dict, resources: dict, run_name=None):
+        run_name = validate_run_name(run_name if run_name is not None else default_run_name(self.profile, preset))
         unresolved = self.unresolved()
         if unresolved:
             raise UncertainSubmission('Resolve the previous uncertain submission before submitting again: '
@@ -550,6 +1013,7 @@ touch -- "$root/.hendrix/managed-v1"
         if not (Path(self.profile.local).expanduser() / script).is_file():
             raise Error(f'Batch script is missing locally: {script}')
         validate_resources(resources)
+        job_name = run_name + "--" + resources["model"]
         args = [str(a) for a in preset.get('args', [])]
         with project_lock(self.profile):
             self.history()  # Fail before contacting the scheduler if state is corrupt.
@@ -574,13 +1038,11 @@ touch -- "$root/.hendrix/managed-v1"
             self.remote(command, timeout=120)
             manifest = dict(kind='job', status='prepared', project=self.profile.name,
                 host=self.profile.host, snapshot=snapshot, token=token, output=output,
-                script=script, args=args, resources=resources, at=dt.datetime.now(dt.timezone.utc).isoformat())
+                script=script, args=args, resources=resources, run_name=job_name,
+                preset_name=preset['name'], at=dt.datetime.now(dt.timezone.utc).isoformat())
             manifest_path = STATE / 'submissions' / f'{token}.json'
             atomic_json(manifest_path, manifest)
-            flags = ['sbatch', '--parsable', '--partition=' + resources['partition'],
-                     '--gres=gpu:' + (resources['model'] + ':' if resources['model'] != 'any' else '') + str(resources['gpus']),
-                     '--cpus-per-task=' + str(resources['cpus']), '--mem=' + resources['memory'],
-                     '--time=' + resources['time'], '--output=' + output + '/slurm-%j.out',
+            flags = ['sbatch', '--parsable', '--job-name=' + job_name, *resource_flags(resources), '--output=' + output + '/slurm-%j.out',
                      '--error=' + output + '/slurm-%j.err', '--comment=hendrix-' + token]
             env = f'export MEANFLOW_VENV={shlex.quote(root + "/" + self.profile.venv)}; '
             # No automatic retry: timeout/connection loss may occur after Slurm accepted it.
@@ -608,13 +1070,39 @@ touch -- "$root/.hendrix/managed-v1"
     def log_path(self, job, stderr=False):
         if not re.fullmatch(r'\d+(?:_\d+)?', job):
             raise Error('Select a concrete job ID.')
+        key = (job, stderr)
+        if key in self._log_paths:
+            return self._log_paths[key]
         record = self.matching_record(job)
         if record:
             return f'{record["output"]}/slurm-{job}.{"err" if stderr else "out"}'
-        f = fields(self.remote('scontrol show job -o ' + shlex.quote(job)))
+        try:
+            f = fields(self.remote('scontrol show job -o ' + shlex.quote(job)))
+        except Error as exc:
+            if 'invalid job id' not in str(exc).lower():
+                raise
+            f = {}
         path = f.get('StdErr' if stderr else 'StdOut', '')
+        if '_' in job:
+            array, task = job.split('_')
+            # A pending array may report its parent path with Slurm's unset-task
+            # sentinel. Resolve the selected task before caching that path.
+            path = path.replace('%A', array).replace('%a', task).replace('_4294967294', '_' + task)
         if not path.startswith('/'):
-            raise Error('No log path found; completed jobs outside the TUI may need a manual path.')
+            # Finished jobs may be purged from scontrol while their files remain.
+            # Search only shallow project log locations, never datasets/snapshots.
+            root = self.remote_root()
+            pattern = shlex.quote(f'*-{job}.{"err" if stderr else "out"}')
+            command = (f'find {shlex.quote(root)} -maxdepth 1 -type f -name {pattern}; '
+                       f'if [ -d {shlex.quote(root + "/results/runs")} ]; then '
+                       f'find {shlex.quote(root + "/results/runs")} -maxdepth 2 '
+                       f'-type f -name {pattern}; fi')
+            candidates = self.remote(command).splitlines()
+            if len(candidates) != 1 or not candidates[0].startswith('/'):
+                raise Error('No unique saved log found for this job in the selected project. '
+                            'Jobs outside the project may need a manual log path.')
+            path = candidates[0]
+        self._log_paths[key] = path
         return path
 
     def logs(self, job, stderr=False):
