@@ -12,6 +12,7 @@ in {
   };
   systemd.tmpfiles.rules = [
     "d ${source} 0755 root root -"
+    "d /home/hjalte/documents/roblox-design-candidates 0700 hjalte users -"
   ];
   systemd.services.roblox-design-dashboard = {
     description = "Private Roblox visual design reviews";
@@ -59,18 +60,35 @@ in {
       MemoryMax = "768M";
     };
   };
-  # Images run under the existing signed-in identity and serialized Codex queue.
+  # Released design/implementation jobs reuse the signed-in serial queue; dispatch defaults paused.
   systemd.services.roblox-design-worker = let
     queue = pkgs.callPackage ../pkgs/codex-queue.nix {};
     python = pkgs.python3.withPackages (p: [ p.flask p.pywebpush p.cryptography ]);
+    # Ordering alone does not wait for the initial gallery import to open HTTP.
+    readiness = pkgs.writeText "roblox-design-worker-ready.py" ''
+      import json,time,urllib.request,urllib.error
+      for attempt in range(45):
+          try:
+              with urllib.request.urlopen("http://127.0.0.1:8765/roblox-design/api/health", timeout=1) as response:
+                  state = json.loads(response.read(8192))
+              if state.get("ok") is True and state.get("revision") == "${dashboard.src.rev}":
+                  break
+          except (OSError, ValueError, urllib.error.URLError):
+              pass
+          time.sleep(0.5)
+      else:
+          raise SystemExit("Dashboard did not become ready at the expected revision; retrying safely.")
+    '';
     workerConfig = pkgs.writeText "roblox-design-worker.json" (builtins.toJSON {
       games = [ "resonance_lab" ];
-      resources = [ "codex:serial" ];
+      resources = [ "codex:serial" "source:resonance_lab" ];
       timeoutSeconds = 86400;
+      commands.implement = [ "${python}/bin/python3" "-B" "${dashboard}/share/roblox-design-dashboard/website/implementation_adapter.py" ];
       commands.generate = [ "${python}/bin/python3" "-B" "${dashboard}/share/roblox-design-dashboard/website/codex_queue_adapter.py" ];
     });
   in {
-    description = "Roblox design image worker using the existing Codex queue";
+    description = "Roblox design and isolated implementation worker";
+    path = [ pkgs.git pkgs.openssh ];
     wantedBy = [ "multi-user.target" ];
     after = [ "roblox-design-dashboard.service" "codex-queue.service" ];
     wants = [ "roblox-design-dashboard.service" "codex-queue.service" ];
@@ -82,11 +100,16 @@ in {
       DASHBOARD_QUEUE_DB = "/var/lib/codex-queue/queue.sqlite3";
       DASHBOARD_QUEUE_REPOSITORY = "/home/hjalte/documents/roblox-gamemodes";
       DASHBOARD_QUEUE_LINKS = "/var/lib/roblox-design-worker/queue-links";
+      DASHBOARD_IMPLEMENTATION_ENABLED = "1";
+      DASHBOARD_IMPLEMENTATION_WORKTREES = "/home/hjalte/documents/roblox-design-candidates";
+      DASHBOARD_IMPLEMENTATION_LINKS = "/var/lib/roblox-design-worker/implementation-links";
       DASHBOARD_GENERATED_IMAGES = "/home/hjalte/.codex/generated_images";
     };
     serviceConfig = {
       User = "hjalte";
       Group = "users";
+      TimeoutStartSec = 90;
+      ExecStartPre = "${python}/bin/python3 -B ${readiness}";
       ExecStart = "${python}/bin/python3 -B ${dashboard}/share/roblox-design-dashboard/website/worker.py --server http://127.0.0.1:8765/roblox-design --config ${workerConfig} --worker-id mobile-dev-design --work-dir /var/lib/roblox-design-worker/jobs";
       StateDirectory = "roblox-design-worker";
       StateDirectoryMode = "0700";
@@ -100,7 +123,7 @@ in {
       PrivateDevices = true;
       ProtectHome = "read-only";
       ProtectSystem = "strict";
-      ReadWritePaths = [ "/var/lib/codex-queue" "/var/lib/roblox-design-worker" ];
+      ReadWritePaths = [ "/var/lib/codex-queue" "/var/lib/roblox-design-worker" "/home/hjalte/documents/roblox-design-candidates" "/home/hjalte/documents/roblox-gamemodes/.git" ];
       ProtectKernelTunables = true;
       ProtectControlGroups = true;
       RestrictSUIDSGID = true;

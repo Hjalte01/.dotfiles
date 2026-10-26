@@ -4,7 +4,7 @@ stdenvNoCC.mkDerivation {
   version = "1.0.0";
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/roblox-visual-dashboard";
-    rev = "bf8c9510143fcc9da8dcf3069ecee402a6f74628";
+    rev = "670518ba8e04b58a6ed0d203e6ef334eb287daae";
   };
   dontBuild = true;
   nativeBuildInputs = [ makeWrapper ];
