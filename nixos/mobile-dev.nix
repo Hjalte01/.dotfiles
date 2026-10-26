@@ -346,7 +346,8 @@ in {
       ProtectKernelModules = true;
       ProtectKernelTunables = true;
       ProtectProc = "invisible";
-      RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
+      # Bubblewrap needs NETLINK_ROUTE to configure its sandbox's loopback device.
+      RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6" "AF_NETLINK"];
       RestrictNamespaces = false; # Codex's workspace sandbox uses user/mount namespaces.
       RestrictRealtime = true;
       RestrictSUIDSGID = true;
