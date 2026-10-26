@@ -22,6 +22,23 @@
       "version_id": "home"
     },
     {
+      "name": "Roblox Design",
+      "repository": "/home/hjalte/documents/roblox-visual-dashboard",
+      "kind": "nixos",
+      "branch": "website/visual-review",
+      "pin": "pkgs/roblox-design-dashboard.nix",
+      "services": [
+        "roblox-design-dashboard.service"
+      ],
+      "health_urls": [
+        "http://127.0.0.1:8080/roblox-design/api/health"
+      ],
+      "refresh": "Update the verified website commit pin, then run nxb through the existing serialized deployment runner.",
+      "note": "Private visual reviews with persistent VPS state. Canonical game source is read-only; Studio/model workers remain separate.",
+      "version_id": "roblox-design",
+      "revision_health_url": "http://127.0.0.1:8765/roblox-design/api/health"
+    },
+    {
       "name": "Codex Queue",
       "repository": "/home/hjalte/documents/codex-queue",
       "kind": "nixos",

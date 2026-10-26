@@ -13,6 +13,7 @@
   aiConcepts = pkgs.callPackage ../pkgs/ai-concepts.nix {};
   atdlLearning = pkgs.callPackage ../pkgs/atdl-learning.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
+  robloxDesignDashboard = pkgs.callPackage ../pkgs/roblox-design-dashboard.nix {};
   # Read versions from the exact sources activated alongside these routes.
   hubVersions = pkgs.writeText "vps-hub-versions.json" (builtins.toJSON
     ((lib.mapAttrs (_: app: {
@@ -20,6 +21,7 @@
       revision = app.src.rev;
     }) {
       home = vpsHub;
+      roblox-design = robloxDesignDashboard;
       codex-queue = codexQueue;
       game-factory = gameFactoryGallery;
       thesis-learning = thesisLearning;
@@ -31,6 +33,7 @@ in {
   imports = [
     "${modulesPath}/profiles/qemu-guest.nix"
     ./obsidian-webdav.nix
+    ./roblox-design-dashboard.nix
   ];
 
   nix.settings = {
@@ -152,6 +155,21 @@ in {
           extraConfig = ''
             default_type application/json;
             add_header Cache-Control "no-store" always;
+          '';
+        };
+        "= /roblox-design" = {
+          return = "308 /roblox-design/";
+          extraConfig = "absolute_redirect off;";
+        };
+        "/roblox-design/" = {
+          proxyPass = "http://127.0.0.1:8765";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
+            proxy_set_header X-Forwarded-Prefix /roblox-design;
+            proxy_set_header Accept-Encoding "";
+            client_max_body_size 18m;
           '';
         };
         "= /codex".return = "308 /codex/";
