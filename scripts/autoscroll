@@ -131,7 +131,9 @@ arm_z() {
   fi
 
   hyprctl keyword bind ", z, exec, $script_path toggle" >/dev/null
-  hyprctl keyword bind ", a, exec, $script_path toggle-up" >/dev/null
+  # Use A's XKB keycode so cleanup cannot remove symbolic A bindings in
+  # other submaps: Hyprland's unbind matches across all submaps.
+  hyprctl keyword bind ", code:38, exec, $script_path toggle-up" >/dev/null
   hyprctl keyword bind ", plus, exec, $script_path speed-up 1" >/dev/null
   hyprctl keyword bind "CTRL, plus, exec, $script_path speed-up 3" >/dev/null
   hyprctl keyword bind "SHIFT, plus, exec, $script_path speed-up 10" >/dev/null
@@ -151,7 +153,7 @@ disarm_z() {
 
   stop_scrolling
   hyprctl keyword unbind ", z" >/dev/null || true
-  hyprctl keyword unbind ", a" >/dev/null || true
+  hyprctl keyword unbind ", code:38" >/dev/null || true
   hyprctl keyword unbind ", plus" >/dev/null || true
   hyprctl keyword unbind "CTRL, plus" >/dev/null || true
   hyprctl keyword unbind "SHIFT, plus" >/dev/null || true

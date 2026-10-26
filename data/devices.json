@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "id": "nixos",
+      "name": "Yoga 7 · main PC",
+      "kind": "linux",
+      "hostname": "nixos",
+      "confidence": "Hardware measured locally; memory is OS-usable, not installed capacity.",
+      "observed_at": "2026-10-24T10:06:41+00:00",
+      "source": "Linux /proc; root statvfs; CPU affinity / cgroup v2 limits; fastfetch JSON; lscpu JSON",
+      "specs": {
+        "os": "NixOS 26.05 (Yarara)",
+        "architecture": "x86_64",
+        "cpu": "AMD Ryzen 7 7735U",
+        "cores": 8,
+        "threads": 16,
+        "ram_bytes": 14326616064,
+        "disk_bytes": 990412693504,
+        "swap_bytes": 15755563008,
+        "gpu": "Radeon 680M",
+        "cuda": false,
+        "virtualized": false,
+        "model": "Yoga 7 16ARP8"
+      },
+      "notes": [
+        "Lenovo Yoga 7 16ARP8 (83BS). 1 TB physical NVMe; root filesystem is smaller.",
+        "Good candidate for larger Linux builds and CPU jobs, subject to live headroom and thermals.",
+        "Integrated GPU uses system memory. CUDA is unavailable; other acceleration depends on application support."
+      ],
+      "sources": [],
+      "benchmark": {
+        "suite": "pbkdf2-sha256-v1",
+        "unit": "derivations/s",
+        "single": 410.108,
+        "multi": 2472.361,
+        "workers": 16,
+        "seconds_per_round": 1.5,
+        "observed_at": "2026-10-24T10:06:48+00:00",
+        "python": "3.13.12",
+        "openssl": "OpenSSL 3.6.1 27 Jan 2026",
+        "notes": "Fixed PBKDF2-HMAC-SHA256, 20000 iterations, dklen=32; rates include process startup. Synthetic CPU/crypto throughput, not universal application performance. Multi workers capped at 16 and available CPU allocation; affected by load, power policy, Python/OpenSSL and provider contention."
+      }
+    },
+    {
+      "id": "mobile-dev",
+      "name": "VPS · mobile-dev",
+      "kind": "linux",
+      "hostname": "mobile-dev",
+      "ssh": "vps",
+      "confidence": "Measured over SSH. CPU allocation is 2 shared vCPUs, not dedicated physical cores.",
+      "observed_at": "2026-10-24T10:06:42+00:00",
+      "source": "Linux /proc; root statvfs; CPU affinity / cgroup v2 limits; fastfetch JSON; lscpu JSON",
+      "specs": {
+        "os": "NixOS 26.05 (Yarara)",
+        "architecture": "x86_64",
+        "cpu": "Intel Xeon (Skylake, IBRS, no TSX)",
+        "cores": null,
+        "threads": 2,
+        "ram_bytes": 4008304640,
+        "disk_bytes": 39467917312,
+        "swap_bytes": 0,
+        "gpu": "Virtio 1.0 GPU",
+        "cuda": false,
+        "virtualized": true,
+        "model": "vServer"
+      },
+      "notes": [
+        "Hetzner KVM vServer. Shared CPU performance can vary with host contention.",
+        "Suitable candidate for lightweight always-on services and remote terminal work, subject to existing service load.",
+        "No swap: leave RAM for the OS and hosted services; refresh before starting a build or job.",
+        "The vps SSH alias is configured on the main PC. On the VPS itself this hostname is probed locally."
+      ],
+      "sources": [],
+      "benchmark": {
+        "suite": "pbkdf2-sha256-v1",
+        "unit": "derivations/s",
+        "single": 59.77,
+        "multi": 112.55,
+        "workers": 2,
+        "seconds_per_round": 1.5,
+        "observed_at": "2026-10-24T10:06:49+00:00",
+        "python": "3.13.12",
+        "openssl": "OpenSSL 3.6.1 27 Jan 2026",
+        "notes": "Fixed PBKDF2-HMAC-SHA256, 20000 iterations, dklen=32; rates include process startup. Synthetic CPU/crypto throughput, not universal application performance. Multi workers capped at 16 and available CPU allocation; affected by load, power policy, Python/OpenSSL and provider contention."
+      }
+    },
+    {
+      "id": "ipad-air",
+      "name": "iPad Air 11-inch · likely 2025",
+      "kind": "ipados",
+      "confidence": "Owner recalls 2025. Likely M3, but exact model/chip/RAM/storage remain unconfirmed.",
+      "source": "Owner description and Apple model identification guide",
+      "specs": {
+        "os": "iPadOS (version unconfirmed)",
+        "architecture": "aarch64",
+        "cpu": null,
+        "cores": null,
+        "threads": null,
+        "ram_bytes": null,
+        "disk_bytes": null,
+        "gpu": null,
+        "cuda": false
+      },
+      "notes": [
+        "Apple identifies the 2025 11-inch Air as M3; purchase year alone does not establish the chip.",
+        "Settings > General > About > Model Number; tap to reveal the A-number. M3: A3266, A3267 or A3270.",
+        "11-inch M2 (2024): A2902/A2903/A2904. Confirm the A-number before filling performance specs.",
+        "Can act as an SSH/web client. Running arbitrary Linux background jobs on stock iPadOS is outside this inventory's execution model."
+      ],
+      "sources": [
+        {
+          "label": "Apple: identify your iPad model",
+          "url": "https://support.apple.com/en-us/108043"
+        }
+      ]
+    },
+    {
+      "id": "iphone-11-pro",
+      "name": "iPhone 11 Pro",
+      "kind": "ios",
+      "confidence": "Model supplied by owner; A13/CPU/GPU from Apple. RAM and owned storage capacity unverified.",
+      "source": "Owner description and Apple technical specifications",
+      "specs": {
+        "os": "iOS (version unconfirmed)",
+        "architecture": "aarch64",
+        "cpu": "Apple A13 Bionic",
+        "cores": 6,
+        "threads": 6,
+        "ram_bytes": null,
+        "disk_bytes": null,
+        "gpu": "Apple A13 (4-core GPU)",
+        "cuda": false
+      },
+      "notes": [
+        "Storage variants are 64, 256 and 512 GB; the owner's capacity is not yet recorded.",
+        "Apple's technical specifications do not state RAM capacity. Unknown values are deliberately left empty.",
+        "Useful as an SSH/web client to the VPS. Native app speed does not imply availability as a Linux job host."
+      ],
+      "sources": [
+        {
+          "label": "Apple: iPhone 11 Pro technical specifications",
+          "url": "https://support.apple.com/en-us/111879"
+        },
+        {
+          "label": "Apple: A13 CPU/GPU comparison",
+          "url": "https://www.apple.com/in/iphone/compare/?modelList=iphone-13%2Ciphone-6"
+        }
+      ]
+    }
+  ]
+}

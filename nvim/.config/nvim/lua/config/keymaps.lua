@@ -118,6 +118,9 @@ vim.api.nvim_create_user_command("ToggleInlayHints", toggle_inlay_hints, {
 
 vim.keymap.set("n", "<leader>uh", toggle_inlay_hints, { desc = "Toggle Inlay Hints" })
 
+vim.keymap.set("n", "<leader>cP", "<cmd>CodeRead<cr>", { desc = "Read code PDF in Zathura" })
+vim.keymap.set("x", "<leader>cP", ":CodeRead<cr>", { desc = "Read selected code PDF in Zathura" })
+
 ----------------------------------------
 --- Copilot and completion integration
 ----------------------------------------

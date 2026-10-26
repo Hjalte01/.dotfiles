@@ -274,7 +274,17 @@ def up():
         print('KU network is reachable; keeping the existing connection.')
         return
     if managed_pid():
-        raise Error('A helper-managed VPN is running but Hendrix DNS is unavailable. Check hendrix status / down.')
+        # A tunnel may be reconnecting after sleep or a network switch. Give its
+        # DNS a bounded grace period before replacing only our own tunnel.
+        print('Waiting for the existing KU VPN…')
+        if wait_ready(timeout=5):
+            print('KU VPN is reachable; keeping the existing connection.')
+            return
+        print('KU VPN has stale DNS; restarting the helper-managed tunnel…')
+        down()
+        if ready():
+            print('KU network is reachable after VPN cleanup.')
+            return
     if run(['systemctl', 'is-active', '--quiet', 'systemd-resolved.service']).returncode:
         raise Error('KU VPN needs systemd-resolved for DNS alongside Tailscale. '
                     'Activate the desktop NixOS configuration with nxb, then retry hendrix up.')

@@ -2,6 +2,9 @@ return {
   -- add pyright to lspconfig
   {
     "neovim/nvim-lspconfig",
+    init = function()
+      require("utils.pyright_diagnostics").setup()
+    end,
     ---@class PluginLspOpts
     opts = {
       inlay_hints = {
@@ -10,7 +13,16 @@ return {
       ---@type lspconfig.options
       servers = {
         -- pyright will be automatically installed with mason and loaded with lspconfig
-        pyright = {},
+        pyright = {
+          handlers = {
+            ["textDocument/publishDiagnostics"] = function(...)
+              return require("utils.pyright_diagnostics").publish(...)
+            end,
+            ["textDocument/diagnostic"] = function(...)
+              return require("utils.pyright_diagnostics").pull(...)
+            end,
+          },
+        },
         clangd = {
           mason = false,
           cmd = (function()

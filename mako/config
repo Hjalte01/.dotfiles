@@ -13,5 +13,10 @@ width=420
 [urgency=high]
 default-timeout=0
 
+# Codex completion messages arrive through Ghostty's terminal notifications.
+[desktop-entry=com.mitchellh.ghostty]
+default-timeout=0
+ignore-timeout=1
+
 [mode=do-not-disturb]
 invisible=1

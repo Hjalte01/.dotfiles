@@ -308,6 +308,7 @@ in {
       CODEX_QUEUE_PORT = "8787";
       CODEX_QUEUE_REVISION = codexQueue.src.rev;
       CODEX_QUEUE_SESSION_COOKIE_SECURE = "true";
+      CODEX_QUEUE_AUTO_GIT_SYNC = "1";
       CODEX_QUEUE_STATE_DIR = "/var/lib/codex-queue";
       CODEX_QUEUE_DEPLOYMENTS = "/etc/codex-queue/deployments.json";
       HOME = "/home/hjalte";

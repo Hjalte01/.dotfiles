@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   ...
 }: let
@@ -219,6 +220,10 @@
 
   windowOverview = pkgs.callPackage ../pkgs/window-overview.nix {};
   desktopWhichKey = pkgs.callPackage ../pkgs/desktop-which-key.nix {};
+  glance = pkgs.callPackage ../pkgs/glance.nix {};
+  monitorLayout = pkgs.callPackage ../pkgs/monitor-layout.nix {};
+  appLauncher = pkgs.callPackage ../pkgs/app-launcher.nix {};
+  imagepick = pkgs.callPackage ../pkgs/imagepick.nix {};
 
   outputPriority = pkgs.writeShellApplication {
     name = "output-priority";
@@ -242,6 +247,27 @@ in {
     ./common.nix
     ./dictation.nix
   ];
+
+  # Writable user state, intentionally separate from Home Manager's symlinks.
+  # The source must exist even before the first layout has been saved.
+  home.activation.monitorLayout = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    run mkdir -p "$HOME/.config/hypr"
+    if [ ! -e "$HOME/.config/hypr/monitor-layout.conf" ]; then
+      run touch "$HOME/.config/hypr/monitor-layout.conf"
+    fi
+    run ${monitorLayout}/bin/monitor-layout --migrate-saved-layout
+  '';
+
+  # Sober is distributed only through Flatpak. Ensure it is installed on this
+  # desktop without downloading updates during every Home Manager activation.
+  home.activation.installSober = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    if ! ${pkgs.flatpak}/bin/flatpak info --user org.vinegarhq.Sober >/dev/null 2>&1; then
+      run ${pkgs.flatpak}/bin/flatpak remote-add --user --if-not-exists \
+        flathub https://flathub.org/repo/flathub.flatpakrepo
+      run ${pkgs.flatpak}/bin/flatpak install --user --noninteractive --assumeyes \
+        flathub org.vinegarhq.Sober
+    fi
+  '';
 
   dotfiles.theme.desktop.enable = true;
   dotfiles.theme.desktop.swayosdPackage = swayosdOveramplified;
@@ -284,6 +310,7 @@ in {
     kobberfaldClientClean
     kobberfaldClientPlay
 
+    vinegar # Roblox Studio in its own Wine prefix (Scenario Lab)
     wineWow64Packages.stable
     winetricks
 
@@ -301,6 +328,7 @@ in {
     # --- hypr window-manager ---
     waybar
     rofi
+    appLauncher
     desktopWhichKey
     windowOverview
     hyprsunset
@@ -327,6 +355,8 @@ in {
     swayosdOveramplified # brightness/audio graphics
     micPriority # Automatic microphone hierarchy and interactive TUI
     outputPriority # Automatic speaker hierarchy and interactive TUI
+    monitorLayout # Arrange physical screens and pointer crossover edges
+    imagepick # Preview, crop, and annotate recent screenshots or copied images
 
     grim # takes the picture
     slurp # Drags the captured picture
@@ -415,6 +445,8 @@ in {
       executable = true;
     };
 
+    ".local/bin/app-launcher".source = "${appLauncher}/bin/app-launcher";
+
     ".local/bin/window-overview" = {
       source = "${windowOverview}/bin/window-overview";
     };
@@ -434,6 +466,11 @@ in {
       executable = true;
     };
 
+    ".local/bin/glance".source = "${glance}/bin/glance";
+
+    ".local/bin/imagepick".source = "${imagepick}/bin/imagepick";
+    ".local/bin/imagepick-menu".source = "${imagepick}/bin/imagepick-menu";
+
     ".local/bin/waybar-toggle" = {
       source = makeLink "scripts/waybar-toggle" ../scripts/waybar-toggle;
       executable = true;
@@ -448,6 +485,8 @@ in {
       source = makeLink "scripts/display-menu" ../scripts/display-menu;
       executable = true;
     };
+
+    ".local/bin/monitor-layout".source = "${monitorLayout}/bin/monitor-layout";
 
     ".local/bin/idle-monitor-toggle" = {
       source = makeLink "scripts/idle-monitor-toggle" ../scripts/idle-monitor-toggle;
@@ -601,6 +640,14 @@ in {
       text = ''
         #!/bin/sh
         exec ${pkgs.flatpak}/bin/flatpak run com.nvidia.geforcenow "$@"
+      '';
+      executable = true;
+    };
+
+    ".local/bin/roblox" = {
+      text = ''
+        #!/bin/sh
+        exec ${pkgs.flatpak}/bin/flatpak run org.vinegarhq.Sober "$@"
       '';
       executable = true;
     };
@@ -860,6 +907,39 @@ in {
       "text/x-shellscript"
     ];
     categories = ["Utility"];
+  };
+
+  xdg.desktopEntries."roblox" = {
+    name = "Roblox (Sober)";
+    genericName = "Roblox Player";
+    comment = "Play Roblox through Sober";
+    exec = "${config.home.homeDirectory}/.local/bin/roblox %u";
+    icon = "org.vinegarhq.Sober";
+    terminal = false;
+    categories = ["Game"];
+    settings.Keywords = "Roblox;Sober;";
+  };
+
+  # Override Vinegar's entry so the app launcher lists Studio by its own name.
+  xdg.desktopEntries."org.vinegarhq.Vinegar" = {
+    name = "Roblox Studio";
+    genericName = "Roblox Game Editor";
+    comment = "Create Roblox experiences through Vinegar";
+    exec = "${pkgs.vinegar}/bin/vinegar %u";
+    icon = "org.vinegarhq.Vinegar";
+    terminal = false;
+    categories = ["Development" "Game"];
+    mimeType = [
+      "application/x-roblox-place"
+      "application/x-roblox-model"
+      "x-scheme-handler/roblox-studio"
+      "x-scheme-handler/roblox-studio-auth"
+    ];
+    settings.Keywords = "Roblox;Studio;Vinegar;";
+    actions.manage = {
+      name = "Manage Vinegar";
+      exec = "${pkgs.vinegar}/bin/vinegar manage";
+    };
   };
 
   xdg.desktopEntries."geforce-now" = {

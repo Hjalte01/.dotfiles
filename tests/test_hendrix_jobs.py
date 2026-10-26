@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from hendrix import core
-from hendrix.app import HendrixApp, SubmitForm
+from hendrix.app import HendrixApp
 from textual.widgets import Button, DataTable, Input, Select
 
 
@@ -101,7 +101,7 @@ class JobUI(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(table.row_count, count)
                     widths = [column.get_render_width(table) for column in table.columns.values()]
                     if value == '0':
-                        self.assertLess(widths[2], full_widths[2])
+                        self.assertLess(widths[1], full_widths[1])
                         self.assertLess(sum(widths), sum(full_widths))
                     else:
                         self.assertEqual(widths, full_widths)
@@ -116,7 +116,7 @@ class JobUI(unittest.IsolatedAsyncioTestCase):
                 app.jobs.pop()
                 app.render_jobs()
                 await pilot.pause()
-                self.assertLess(list(table.columns.values())[2].get_render_width(table), full_widths[2])
+                self.assertLess(list(table.columns.values())[1].get_render_width(table), full_widths[1])
 
     async def test_follow_off_allows_switching_logs_by_job_selection(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(core, 'CONFIG', Path(directory)/'config'), \
@@ -160,7 +160,7 @@ class JobUI(unittest.IsolatedAsyncioTestCase):
                     app.render_jobs()
                     table = app.query_one('#jobs', DataTable)
                     self.assertEqual(table.row_count, 4)
-                    self.assertEqual(table.get_row('3')[2], app.profile.presets[0]['name'])
+                    self.assertEqual(table.get_cell('3', 'run'), app.profile.presets[0]['name'])
                     app.query_one('#jobs-view', Select).value = 'active'
                     await pilot.pause()
                     self.assertEqual(table.row_count, 1)
@@ -173,22 +173,3 @@ class JobUI(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(table.row_count, 5)
                     await pilot.resize_terminal(60, 24)
                     await pilot.pause()
-
-    async def test_run_name_validation_without_submission(self):
-        with tempfile.TemporaryDirectory() as directory, patch.object(core, 'CONFIG', Path(directory)/'config'), \
-             patch.object(core, 'STATE', Path(directory)/'state'):
-            app = HendrixApp()
-            async with app.run_test(size=(80, 30)) as pilot:
-                form = SubmitForm(app.profile, ['l40s'], backend=app.backend)
-                app.push_screen(form)
-                await pilot.pause()
-                field = form.query_one('#run-name', Input)
-                self.assertIn('smoke', field.value)
-                field.value = 'bad name'
-                form.action_review()
-                self.assertIs(app.screen, form)
-                field.value = 'my-thesis-mf'
-                form.action_review()
-                await pilot.pause()
-                self.assertEqual(form.run_name, 'my-thesis-mf')
-                self.assertIsNot(app.screen, form)

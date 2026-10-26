@@ -12,8 +12,8 @@ import unittest
 from unittest.mock import patch
 
 from hendrix import core, vpn
-from hendrix.app import CompareGPUs, Confirm, CopyRequest, Help, HendrixApp, SubmitForm, GPUChoices
-from textual.widgets import Button, DataTable, Input, Select, TabbedContent, Collapsible
+from hendrix.app import Confirm, CopyRequest, Help, HendrixApp, TABLE_COLUMNS
+from textual.widgets import Button, DataTable, Input, Select, TabbedContent
 
 NODES = '''NodeName=hendrixgpu01fl CPUTot=96 RealMemory=708000 Gres=gpu:a100:6(S:0-1) State=MIXED Partitions=gpu,preempt AllocTRES=cpu=4,gres/gpu=2,gres/gpu:a100=2 GresUsed=gpu:a100:2(IDX:0-1)
 NodeName=hendrixgpu16fl CPUTot=128 CPUEfctv=124 CPUAlloc=0 RealMemory=2000000 AllocMem=0 Gres=gpu:h100:4 State=IDLE Partitions=gpu AllocTRES=gres/gpu=0 GresUsed=gpu:h100:0(IDX:N/A)
@@ -706,7 +706,7 @@ class LoginTests(unittest.TestCase):
 
 
 class TUITests(unittest.IsolatedAsyncioTestCase):
-    async def test_number_sections_and_gpu_form_keyboard(self):
+    async def test_number_sections_and_no_launcher(self):
         with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
              patch.object(core, 'STATE', Path(d)/'state'), patch.object(Path, 'home', return_value=Path(d)):
             app = HendrixApp()
@@ -714,8 +714,8 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                 async with app.run_test(size=(80, 24)) as pilot:
                     app.nodes = core.parse_nodes(NODES)
                     app.render_nodes()
-                    for key, pane, target in [('3', 'project-tab', 'sync'), ('4', 'jobs-tab', 'jobs'),
-                                               ('5', 'jobs-tab', 'job-log'), ('6', 'queue-tab', 'cluster-queue'), ('1', 'gpu-tab', 'models'),
+                    for key, pane, target in [('5', 'project-tab', 'sync'), ('3', 'jobs-tab', 'jobs'),
+                                               ('4', 'jobs-tab', 'job-log'), ('6', 'queue-tab', 'cluster-queue'), ('1', 'gpu-tab', 'models'),
                                                ('2', 'gpu-tab', 'nodes')]:
                         await pilot.press(key)
                         self.assertEqual(app.query_one(TabbedContent).active, pane)
@@ -725,115 +725,11 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     app.query_one('#node-filter', Input).value = ''
                     await pilot.press('escape', '1', 'v', 'j', 'v', 'b')
                     await pilot.pause()
-                    form = app.screen
-                    self.assertIsInstance(form, SubmitForm)
-                    rendered = '\n'.join(strip.text for strip in form._compositor.render_strips())
-                    for label in ('Run', 'Smoke', 'Advanced settings', 'Review request'):
-                        self.assertIn(label, rendered)
-                    table = form.query_one('#submit-gpus', GPUChoices)
-                    self.assertEqual(form.counts, {'h100': 1, 'a100': 1})
-                    self.assertTrue(form.query_one('#advanced', Collapsible).collapsed)
-                    await pilot.press('l', 'l', 'l', 'l', 'l')
-                    self.assertEqual(form.counts['h100'], 4)
-                    await pilot.press('j', 'l', 'h')
-                    self.assertEqual(form.counts['a100'], 1)
-                    await pilot.press('space')
-                    self.assertEqual(form.counts['a100'], 0)
-                    await pilot.press('space', 'G')
-                    self.assertEqual(table.cursor_row, table.row_count - 1)
-                    await pilot.press('g')
-                    self.assertEqual(table.cursor_row, 0)
-                    await pilot.press('a')
-                    self.assertFalse(form.query_one('#advanced', Collapsible).collapsed)
-                    cpus = form.query_one('#resource-cpus', Input)
-                    cpus.focus()
-                    await pilot.press('ctrl+a', 'ctrl+k', '8')
-                    self.assertEqual(cpus.value, '8')
-                    self.assertEqual(app.query_one(TabbedContent).active, 'gpu-tab')
-                    await pilot.press('escape', 'a', 'ctrl+enter')
-                    await pilot.pause()
-                    self.assertIsInstance(app.screen, Confirm)
-                    await pilot.press('escape')
-                    await pilot.pause()
-                    self.assertFalse(app.busy)
-                    self.assertFalse((core.CONFIG / 'launch-settings.json').exists())
+                    self.assertNotIsInstance(app.screen, Confirm)
+                    self.assertFalse(app.query('#submit'))
+                    self.assertFalse(hasattr(app, 'action_submit'))
 
-    async def test_multiple_gpu_jobs_saved_defaults_and_partial_failure(self):
-        with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
-             patch.object(core, 'STATE', Path(d)/'state'), patch.object(Path, 'home', return_value=Path(d)):
-            app = HendrixApp()
-            submitted = dict(job_id='123', snapshot='/snapshot', output='/logs')
-            with patch.object(core.Backend, 'remote', side_effect=AssertionError('Unexpected network call')), \
-                 patch.object(core.Backend, 'submit', return_value=submitted) as submit, \
-                 patch.object(HendrixApp, 'refresh_data'):
-                async with app.run_test(size=(110, 45)) as pilot:
-                    app.nodes = core.parse_nodes(NODES)
-                    app.render_nodes()
-                    app.marked_rows = {('hendrixgpu16fl', 'h100'), ('hendrixgpu01fl', 'a100')}
-                    await pilot.press('3', 'b')
-                    await pilot.pause()
-                    form = app.screen
-                    await pilot.press('l', 'j', 'l')
-                    form.query_one('#resource-cpus', Input).value = '12'
-                    form.query_one('#resource-time', Input).value = '02:00:00'
-                    await pilot.press('ctrl+enter')
-                    await pilot.pause()
-                    await pilot.press('enter')
-                    await pilot.pause(.3)
-                    self.assertEqual(submit.call_count, 2)
-                    requests = [call.args[1] for call in submit.call_args_list]
-                    self.assertEqual({r['model']: r['gpus'] for r in requests}, {'h100': 2, 'a100': 2})
-                    self.assertTrue(all(r['cpus'] == 12 for r in requests))
-                    app.marked_rows.clear()
-                    await pilot.press('b')
-                    await pilot.pause()
-                    form = app.screen
-                    self.assertEqual(form.counts, {'h100': 2, 'a100': 2})
-                    self.assertEqual(form.query_one('#resource-cpus', Input).value, '12')
-                    self.assertEqual(form.query_one('#resource-time', Input).value, '02:00:00')
-                    preset = form.query_one('#preset', Select)
-                    preset.value = 1
-                    await pilot.pause()
-                    self.assertEqual(form.query_one('#resource-time', Input).value, '05:00:00')
-                    self.assertEqual(form.query_one('#resource-cpus', Input).value, '4')
-                    preset.value = 0
-                    await pilot.pause()
-                    self.assertEqual(form.query_one('#resource-cpus', Input).value, '12')
-                    submit.reset_mock()
-                    submit.side_effect = [submitted, core.UncertainSubmission('lost response')]
-                    form.query_one('#submit-gpus', GPUChoices).focus()
-                    await pilot.press('G', 'k', 'space', 'b')
-                    await pilot.pause()
-                    await pilot.press('enter')
-                    await pilot.pause(.3)
-                    self.assertEqual(submit.call_count, 2)
-                    self.assertFalse(app.busy)
-                    saved = core.load_launch_settings()
-                    remembered = saved['requests'][core.launch_key(app.profile, app.profile.presets[0])]
-                    self.assertEqual(remembered[:2], requests)
-                    self.assertEqual(len(remembered), 3)
-                    self.assertEqual(remembered[2]['model'], 'titan')
-
-    async def test_preset_settings_survive_reopening_and_validation(self):
-        with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'):
-            profile = core.seed_profile()
-            requests = [dict(model='a100', gpus=3, partition='gpu', cpus=16, memory='64G', time='06:00:00')]
-            core.remember_launch(profile, profile.presets[1], requests)
-            form = SubmitForm(profile, ['a100', 'h100'], chosen='h100')
-            self.assertEqual(form.preset_index, 1)
-            self.assertEqual(form.counts, {'a100': 3})
-            self.assertEqual(form.defaults(1)['memory'], '64G')
-            marked = SubmitForm(profile, ['a100', 'h100'], selected=['h100'])
-            self.assertEqual(marked.counts, {'h100': 1})
-            profile.remote = '~/different-project'
-            self.assertEqual(SubmitForm(profile, ['a100']).preset_index, 0)
-            self.assertEqual(SubmitForm(profile, ['a100']).defaults(1)['cpus'], 4)
-            core.atomic_json(core.CONFIG / 'launch-settings.json', {
-                'last_presets': {}, 'requests': {'bad': [dict(requests[0], gpus='3')]}})
-            with self.assertRaises(core.Error):
-                SubmitForm(profile, ['a100'])
-
-    async def test_mount_refresh_filter_and_submission_cancel(self):
+    async def test_mount_and_cached_filter(self):
         with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
              patch.object(core, 'STATE', Path(d)/'state'), patch.object(Path, 'home', return_value=Path(d)):
             with patch.object(core.Backend, 'remote', side_effect=AssertionError('Unexpected network call')):
@@ -849,17 +745,6 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     app.jobs = core.parse_queue('123|run|RUNNING|1:00|5:00:00|node|gpu:1|gpu\n')
                     app.render_jobs()
                     self.assertEqual(app.selected_job(), '123')
-                    app.action_submit()
-                    await pilot.pause()
-                    self.assertIsInstance(app.screen, SubmitForm)
-                    app.screen.query_one('#review').scroll_visible(immediate=True)
-                    await pilot.pause()
-                    await pilot.click('#review')
-                    await pilot.pause()
-                    self.assertIsInstance(app.screen, Confirm)
-                    await pilot.click('#no')
-                    await pilot.pause()
-                    self.assertFalse(app.busy)
 
     async def test_hjkl_navigation_inputs_dropdowns_and_filters(self):
         with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
@@ -898,7 +783,7 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     table.focus()
                     await pilot.press('alt+l')
                     await pilot.pause()
-                    self.assertEqual(app.query_one(TabbedContent).active, 'project-tab')
+                    self.assertEqual(app.query_one(TabbedContent).active, 'jobs-tab')
 
     async def test_compact_layout_headers_reasons_and_help(self):
         with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
@@ -916,12 +801,11 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     self.assertLess(models.region.bottom, table.region.y)
                     self.assertLessEqual(table.virtual_size.width, table.content_size.width)
                     self.assertFalse(app.query('#gpu-sort'))
-                    self.assertEqual(len(models.columns), 7)
-                    self.assertEqual(len(table.columns), 6)
+                    self.assertEqual(len(models.columns), 3)
+                    self.assertEqual(len(table.columns), 4)
                     self.assertEqual(next(iter(table.columns)).value, 'node')
                     self.assertEqual(str(table.get_cell(app.table_row_key(table), 'node')), 'gpu16fl')
-                    self.assertEqual(str(table.get_cell(app.table_row_key(table), 'gpu')), '4(4)')
-                    self.assertEqual(str(table.get_cell(app.table_row_key(table), 'cpu')), '124(124)')
+                    self.assertEqual(str(table.get_cell(app.table_row_key(table), 'gpu')), '████████ 4(4)')
                     reasons = app.query_one('#reasons', Button)
                     self.assertEqual(str(reasons.label), 'Reasons off (0)')
                     self.assertTrue(reasons.disabled)
@@ -930,11 +814,11 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(str(reasons.label), 'Reasons off (1)')
                     await pilot.click('#reasons')
                     await pilot.pause()
-                    self.assertEqual(len(table.columns), 7)
+                    self.assertEqual(len(table.columns), 5)
                     self.assertIn('reason', [key.value for key in table.columns])
                     await pilot.click('#reasons')
                     await pilot.pause()
-                    self.assertEqual(len(table.columns), 6)
+                    self.assertEqual(len(table.columns), 4)
                     # Actual mouse clicks, not direct calls to the event handler.
                     await pilot.click('#models', offset=(4, 1))
                     await pilot.pause()
@@ -967,6 +851,10 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     self.assertGreaterEqual(search.content_size.width, 20)
                     self.assertGreaterEqual(app.query_one('#connection').region.y, 1)
                     self.assertGreaterEqual(app.query_one('#project-bar').region.y, 2)
+                    # Optional resource columns can still display full large counts.
+                    app.column_choices['nodes'] = {key for key, _, _ in TABLE_COLUMNS['nodes']}
+                    app.render_nodes()
+                    await pilot.pause()
                     # Wide memory counts fit without losing the closing parenthesis.
                     ram_column = next(c for key, c in table.columns.items() if key.value == 'ram')
                     self.assertGreaterEqual(ram_column.width, len(str(table.get_cell(app.table_row_key(table), 'ram'))))
@@ -1095,6 +983,7 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                     self.assertLessEqual(app.query_one('#queue-partition').region.right, 60)
                     self.assertGreater(table.row_count, 0)
                     app.query_one('#state-filter', Select).value = 'all'
+                    app.column_choices['models'].add('pending')
                     app.sort_key = 'pending'
                     app.sort_reverse = False
                     app.render_nodes()
@@ -1118,108 +1007,6 @@ class TUITests(unittest.IsolatedAsyncioTestCase):
                         await pilot.pause(.3)
                         self.assertTrue(app.connected)
                         self.assertEqual(app.query_one('#cluster-queue', DataTable).row_count, 5)
-
-    async def test_comparison_only_queries_on_press_invalidates_and_explicitly_selects(self):
-        with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
-             patch.object(core, 'STATE', Path(d)/'state'), patch.object(Path, 'home', return_value=Path(d)):
-            app = HendrixApp()
-            local = Path(d) / 'project'
-            local.mkdir()
-            script = local / 'train.sbatch'
-            script.write_text('#!/bin/sh\n#SBATCH --nodes=1\n#SBATCH --ntasks=1\ntrue\n')
-            app.profile.local = str(local)
-            app.profile.presets = [dict(name='Train', script='train.sbatch', args=['config.yml'], time='05:00:00')]
-            start = dt.datetime(2026, 10, 5, 12, tzinfo=dt.timezone.utc).astimezone()
-            def estimate(preset, resources, body):
-                if resources['model'] == 'l40s':
-                    return dict(start=start, at=start, detail='earlier estimate', error=False)
-                if resources['model'] == 'a100':
-                    return dict(start=start - dt.timedelta(hours=1), at=start, detail='ambiguous memory', error=False)
-                return dict(start=None, at=start, detail='allocation failure', error=True)
-            with patch.object(app.backend, 'estimate', side_effect=estimate) as estimates, \
-                 patch.object(app.backend, 'submit', side_effect=AssertionError('Unexpected submission')), \
-                 patch.object(app.backend, 'sync', side_effect=AssertionError('Unexpected sync')), \
-                 patch.object(app.backend, 'record', side_effect=AssertionError('Unexpected history write')), \
-                 patch.object(app.backend, 'remote', side_effect=AssertionError('Unexpected inventory query')):
-                async with app.run_test(size=(80, 30)) as pilot:
-                    app.nodes = core.parse_nodes(NODES)
-                    app.nodes += core.parse_nodes('NodeName=l40 Partitions=gpu State=IDLE CPUTot=8 CPUAlloc=0 RealMemory=65536 AllocMem=0 Gres=gpu:l40s:4 GresUsed=gpu:l40s:0')
-                    app.cluster_jobs, _ = core.parse_cluster_queue(CLUSTER_QUEUE)
-                    app.render_nodes()
-                    await pilot.press('1', 'b')
-                    await pilot.pause()
-                    form = app.screen
-                    original_counts = form.counts.copy()
-                    form.query_one('#minimum-vram', Input).value = '48'
-                    await pilot.pause()
-                    await pilot.press('c')
-                    await pilot.pause()
-                    comparison = app.screen
-                    self.assertIsInstance(comparison, CompareGPUs)
-                    self.assertEqual(estimates.call_count, 0)
-                    self.assertEqual(comparison.count, '1')
-                    table = comparison.query_one('#comparison', DataTable)
-                    self.assertEqual(table.row_count, 5)  # Includes models with no currently free capacity.
-                    self.assertEqual(str(table.get_cell('a100', 'memory')), 'variant uncertain')
-                    await pilot.press('c')
-                    await pilot.pause(.3)
-                    self.assertEqual(estimates.call_count, 5)
-                    self.assertEqual(str(table.get_cell('l40s', 'model')), 'l40s ★')
-                    self.assertEqual(str(table.get_cell('a100', 'model')), 'a100')
-                    self.assertEqual(str(table.get_cell('h100', 'start')), 'scheduler error')
-                    table.move_cursor(row=comparison.models.index('l40s'))
-                    comparison.render_comparison()
-                    self.assertEqual(comparison.current_model(), 'l40s')
-                    comparison.query_one('#compare-count', Input).value = '2'
-                    await pilot.pause()
-                    self.assertEqual(comparison.estimates, {})
-                    await pilot.press('c')
-                    await pilot.pause(.3)
-                    self.assertEqual(estimates.call_count, 10)
-                    self.assertTrue(all(call.args[1]['gpus'] == 2 for call in estimates.call_args_list[-5:]))
-                    script.write_text(script.read_text() + '# changed\n')
-                    comparison.check_script()
-                    self.assertEqual(comparison.estimates, {})
-                    self.assertIn('Script changed', comparison.state)
-                    await pilot.resize_terminal(60, 24)
-                    await pilot.pause()
-                    self.assertLessEqual(comparison.query_one('#dialog').region.right, 60)
-                    self.assertEqual(form.counts, original_counts)
-                    await pilot.press('u')
-                    await pilot.pause()
-                    self.assertIs(app.screen, form)
-                    self.assertEqual(form.counts, {'l40s': 2})
-                    self.assertEqual(form.minimum_vram, '48')
-                    await pilot.press('escape')
-                    await pilot.pause()
-                    self.assertFalse(app.busy)
-                    self.assertFalse((core.CONFIG / 'launch-settings.json').exists())
-                    self.assertFalse(core.STATE.exists())
-
-    async def test_comparison_discards_estimates_when_script_changes_during_query(self):
-        with tempfile.TemporaryDirectory() as d, patch.object(core, 'CONFIG', Path(d)/'config'), \
-             patch.object(core, 'STATE', Path(d)/'state'), patch.object(Path, 'home', return_value=Path(d)):
-            app = HendrixApp()
-            script = Path(d) / 'train.sbatch'
-            script.write_text('#!/bin/sh\ntrue\n')
-            profile = core.Profile('test', d, '~/test', presets=[dict(name='Train', script='train.sbatch')])
-            backend = core.Backend(profile)
-            def estimate(*_):
-                script.write_text('#!/bin/sh\n#SBATCH --ntasks=2\ntrue\n')
-                now = dt.datetime.now().astimezone()
-                return dict(start=now, at=now, detail='old script', error=False)
-            with patch.object(backend, 'estimate', side_effect=estimate):
-                async with app.run_test(size=(100, 35)) as pilot:
-                    dialog = CompareGPUs(backend, profile.presets[0],
-                        dict(partition='gpu', cpus=4, memory='32G', time='05:00:00'), 1, '', core.parse_nodes(NODES), None)
-                    app.push_screen(dialog)
-                    await pilot.pause()
-                    await pilot.press('c')
-                    await pilot.pause(.3)
-                    self.assertEqual(dialog.estimates, {})
-                    self.assertIn('Script changed', dialog.state)
-                    self.assertIn('unknown', str(dialog.query_one('#comparison').get_cell('h100', 'fit')))
-                    await pilot.press('escape')
 
 
 if __name__ == '__main__':

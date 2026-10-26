@@ -50,7 +50,7 @@ ensure_idle_monitor() {
 }
 
 focus_visible_monitor() {
-  if hyprctl monitors all -j | jq -e --arg monitor "$visible_monitor" 'any(.[]; .name == $monitor)' >/dev/null; then
+  if hyprctl monitors -j | jq -e --arg monitor "$visible_monitor" 'any(.[]; .name == $monitor)' >/dev/null; then
     hyprctl dispatch focusmonitor "$visible_monitor" >/dev/null
     return
   fi
@@ -62,7 +62,22 @@ focus_visible_monitor() {
       | head -n 1
   )"
 
-  [[ -n "$fallback_monitor" ]] && hyprctl dispatch focusmonitor "$fallback_monitor" >/dev/null
+  if [[ -z "$fallback_monitor" ]]; then
+    printf 'No visible monitor available\n' >&2
+    exit 1
+  fi
+  hyprctl dispatch focusmonitor "$fallback_monitor" >/dev/null
+}
+
+rescue_numbered_workspace() {
+  # A headless output can inherit an ordinary slot when it is created. Bring
+  # that workspace back without swapping the visible workspace onto idle.
+  if hyprctl workspaces -j | jq -e --arg name "${workspace#name:}" --arg idle "$idle_output" \
+    'any(.[]; .name == $name and .monitor == $idle)' >/dev/null; then
+    local monitor
+    monitor="$(active_monitor)"
+    hyprctl dispatch moveworkspacetomonitor "$workspace $monitor" >/dev/null
+  fi
 }
 
 active_window_address() {
@@ -81,6 +96,7 @@ case "$action" in
       focus_visible_monitor
     fi
 
+    rescue_numbered_workspace
     hyprctl dispatch workspace "$workspace" >/dev/null
     ;;
   move)
@@ -89,9 +105,12 @@ case "$action" in
       exit 0
     fi
 
+    # Moving a workspace off idle can activate its own window. Capture the
+    # requested source first so Shift+number still moves the original window.
+    address="$(active_window_address)"
     if [[ "$(active_monitor)" == "$idle_output" ]]; then
-      address="$(active_window_address)"
       focus_visible_monitor
+      rescue_numbered_workspace
       hyprctl dispatch workspace "$workspace" >/dev/null
 
       if [[ -n "$address" && "$address" != "0x" ]]; then
@@ -99,7 +118,10 @@ case "$action" in
         hyprctl dispatch focuswindow "address:$address" >/dev/null 2>&1 || true
       fi
     else
-      hyprctl dispatch movetoworkspace "$workspace" >/dev/null
+      rescue_numbered_workspace
+      if [[ -n "$address" && "$address" != "0x" ]]; then
+        hyprctl dispatch movetoworkspace "$workspace,address:$address" >/dev/null
+      fi
     fi
     ;;
   *)

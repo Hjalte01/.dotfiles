@@ -1,7 +1,7 @@
 include!(env!("DOTFILES_THEME_RS"));
 use crate::{
     hypr::Snapshot,
-    layout::{self, Card, Group, Rect},
+    layout::{self, Card, Group, Rect, Scope, SetPanel},
 };
 use fast_image_resize as fir;
 use fontdue::{Font, FontSettings, Metrics};
@@ -15,21 +15,82 @@ pub struct Capture {
     pub pixels: Vec<u8>,
     pub generation: u64,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewMode {
+    #[default]
+    Workspaces,
+    Windows,
+}
+impl ViewMode {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Workspaces => Self::Windows,
+            Self::Windows => Self::Workspaces,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Workspaces => "Workspaces",
+            Self::Windows => "Windows",
+        }
+    }
+}
+#[derive(Clone, Copy)]
+pub enum Browse {
+    First,
+    Last,
+    Previous,
+    Next,
+}
 #[derive(Default)]
 pub struct Ui {
     pub snapshot: Option<Snapshot>,
     pub query: String,
     pub workspace: Option<i64>,
-    pub flat: bool,
+    pub mode: ViewMode,
+    pub all_sets: bool,
     pub selected: usize,
     pub inspect: bool,
     pub native: bool,
     pub pan: [f32; 2],
     pub numbers_in_search: bool,
     pub groups: Vec<Group>,
+    pub set_panels: Vec<SetPanel>,
     pub hits: Vec<(Rect, Action)>,
     pub pointer: [f32; 2],
     pub error: String,
+}
+impl Ui {
+    pub fn browse(&mut self, direction: Browse) {
+        let indices = self.indices();
+        if indices.is_empty() {
+            return;
+        }
+        let position = indices.iter().position(|&i| i == self.selected);
+        let target = match direction {
+            Browse::First => 0,
+            Browse::Last => indices.len() - 1,
+            Browse::Next => position.map_or(0, |p| (p + 1) % indices.len()),
+            Browse::Previous => position.map_or(indices.len() - 1, |p| {
+                (p + indices.len() - 1) % indices.len()
+            }),
+        };
+        self.selected = indices[target];
+        self.pan = [0., 0.];
+    }
+    pub fn scope(&self) -> Scope {
+        Scope {
+            workspace: self.workspace,
+            all_sets: self.all_sets,
+        }
+    }
+    pub fn indices(&self) -> Vec<usize> {
+        self.snapshot
+            .as_ref()
+            .map(|s| layout::matching(s, &self.query, self.scope()))
+            .unwrap_or_default()
+    }
 }
 #[derive(Clone, Debug)]
 pub enum Action {
@@ -38,6 +99,8 @@ pub enum Action {
     Workspace(i64),
     All,
     Mode,
+    View(ViewMode),
+    Scope(bool),
     Back,
     Native,
     Fit,
@@ -109,20 +172,27 @@ impl Renderer {
                 32.,
                 22.,
                 if ui.inspect {
-                    "Read window"
-                } else if ui.flat {
-                    "Windows"
+                    "Window preview"
                 } else {
-                    "Workspaces"
+                    ui.mode.label()
                 },
                 30.,
                 theme.text,
                 w - 360.,
             );
             let subtitle = format!(
-                "{} workspaces  ·  {} windows",
-                snapshot.workspaces.len(),
-                snapshot.clients.len()
+                "{}  ·  {} workspaces  ·  {} windows",
+                if ui.all_sets {
+                    "All sets"
+                } else {
+                    snapshot.set_name(&snapshot.current_set)
+                },
+                snapshot
+                    .workspaces
+                    .iter()
+                    .filter(|w| ui.scope().includes(snapshot, w))
+                    .count(),
+                ui.indices().len()
             );
             canvas.text(
                 33.,
@@ -149,23 +219,38 @@ impl Renderer {
             );
             let mode = Rect::new(w - 320., 96., 288., 44.);
             canvas.rounded(mode, mix(theme.base, theme.surface, 0.7), 12.);
-            for (label, active, offset, width) in [
-                ("Workspaces", !ui.flat, 4., 144.),
-                ("Windows", ui.flat, 152., 132.),
+            for (view, offset, width) in [
+                (ViewMode::Workspaces, 4., 144.),
+                (ViewMode::Windows, 152., 132.),
             ] {
+                let active = ui.mode == view;
                 let segment = Rect::new(mode.x + offset, mode.y + 4., width, 36.);
                 if active {
                     canvas.rounded(segment, mix(theme.surface, theme.accent, 0.19), 9.);
                 }
                 canvas.centered(
                     segment,
-                    label,
+                    view.label(),
                     14.,
                     if active { theme.accent } else { theme.muted },
                 );
-                if !active {
-                    ui.hits.push((segment, Action::Mode));
+                ui.hits.push((segment, Action::View(view)));
+            }
+            let scope = Rect::new(w - 582., 96., 244., 44.);
+            canvas.rounded(scope, mix(theme.base, theme.surface, 0.7), 12.);
+            for (all, label, offset) in [(false, "Current set", 4.), (true, "All sets", 126.)] {
+                let active = all == ui.all_sets;
+                let segment = Rect::new(scope.x + offset, scope.y + 4., 114., 36.);
+                if active {
+                    canvas.rounded(segment, mix(theme.surface, theme.accent, 0.19), 9.);
                 }
+                canvas.centered(
+                    segment,
+                    label,
+                    13.,
+                    if active { theme.accent } else { theme.muted },
+                );
+                ui.hits.push((segment, Action::Scope(all)));
             }
             if ui.inspect {
                 if let Some(c) = snapshot.clients.get(ui.selected) {
@@ -173,15 +258,15 @@ impl Renderer {
                         26.,
                         107.,
                         &format!(
-                            "[{}]  {}  ·  Workspace {}  ·  {}",
+                            "[{}]  {}  ·  {}  ·  {}",
                             ui.selected + 1,
                             c.app(),
-                            c.workspace.name,
+                            snapshot.context(&c.workspace),
                             c.states()
                         ),
                         18.,
                         theme.muted,
-                        w - 370.,
+                        w - 646.,
                     );
                     let area = Rect::new(32., 162., w - 64., h - 233.);
                     canvas.fill(area, theme.base);
@@ -240,7 +325,7 @@ impl Renderer {
                     canvas.text(
                         26.,
                         h - 40.,
-                        "Drag / scroll to pan · ← → browse",
+                        "Drag / scroll to pan · ← → / PgUp PgDn browse · Home / End",
                         16.,
                         theme.muted,
                         w - 730.,
@@ -251,12 +336,12 @@ impl Renderer {
                     if ui.numbers_in_search {
                         "Search (numbers included)…"
                     } else {
-                        "Type to search all windows…"
+                        "Search apps, titles, workspaces or sets…"
                     }
                 } else {
                     &ui.query
                 };
-                let search_rect = Rect::new(32., 96., w - 368., 44.);
+                let search_rect = Rect::new(32., 96., w - 646., 44.);
                 canvas.rounded(search_rect, mix(theme.base, theme.surface, 0.8), 12.);
                 canvas.outline(
                     search_rect,
@@ -283,19 +368,51 @@ impl Renderer {
                     },
                     search_rect.w - 112.,
                 );
-                let indices = layout::matching(snapshot, &ui.query, ui.workspace);
+                let indices = ui.indices();
                 if !indices.contains(&ui.selected) {
-                    ui.selected = indices.first().copied().unwrap_or(0);
+                    ui.selected = indices.first().copied().unwrap_or(snapshot.clients.len());
                 }
-                ui.groups = layout::arrange(
+                let area = Rect::new(32., 164., w - 64., h - 242.);
+                (ui.set_panels, ui.groups) = layout::arrange_overview(
                     snapshot,
                     &indices,
-                    Rect::new(32., 164., w - 64., h - 242.),
-                    ui.flat,
-                    ui.workspace,
+                    area,
+                    ui.mode == ViewMode::Windows,
+                    ui.scope(),
                 );
+                for panel in &ui.set_panels {
+                    let current = panel.id.as_deref() == Some(snapshot.current_set.as_str());
+                    canvas.shadow(panel.rect, 20., 0.12);
+                    canvas.rounded(
+                        panel.rect,
+                        mix(
+                            theme.base,
+                            theme.accent,
+                            if current { 0.075 } else { 0.025 },
+                        ),
+                        20.,
+                    );
+                    canvas.outline(
+                        panel.rect,
+                        mix(
+                            theme.overlay,
+                            theme.accent,
+                            if current { 0.60 } else { 0.10 },
+                        ),
+                        20.,
+                        if current { 2. } else { 1. },
+                    );
+                    canvas.text(
+                        panel.rect.x + 18.,
+                        panel.rect.y + 10.,
+                        &format!("{}{}", panel.name, if current { " · Current" } else { "" }),
+                        19.,
+                        if current { theme.accent } else { theme.text },
+                        panel.rect.w - 36.,
+                    );
+                }
                 for group in &ui.groups {
-                    if !ui.flat {
+                    if ui.mode != ViewMode::Windows {
                         let current = snapshot.monitors.iter().any(|m| {
                             m.name == snapshot.monitor && m.active_workspace.id == group.id
                         });
@@ -307,13 +424,19 @@ impl Renderer {
                             18.,
                             1.,
                         );
+                        let compact = group.rect.w < 320. || group.rect.h < 180.;
                         let title = Rect::new(
-                            group.rect.x + 12.,
-                            group.rect.y + 8.,
-                            group.rect.w - 24.,
-                            48.,
+                            group.rect.x + 8.,
+                            group.rect.y + 4.,
+                            group.rect.w - 16.,
+                            if compact { 28. } else { 52. },
                         );
-                        let badge = Rect::new(title.x + 2., title.y + 4., 36., 36.);
+                        let badge = Rect::new(
+                            title.x + 2.,
+                            title.y + 3.,
+                            if compact { 24. } else { 36. },
+                            if compact { 24. } else { 36. },
+                        );
                         canvas.rounded(
                             badge,
                             mix(
@@ -321,38 +444,84 @@ impl Renderer {
                                 theme.accent,
                                 if current { 0.25 } else { 0.10 },
                             ),
-                            10.,
+                            8.,
                         );
-                        canvas.centered(badge, &group.name, 17., theme.accent);
-                        canvas.text(
-                            title.x + 50.,
-                            title.y + 1.,
-                            &format!("Workspace {}", group.name),
-                            17.,
-                            theme.text,
-                            title.w - 160.,
+                        canvas.centered(
+                            badge,
+                            &group.name,
+                            if compact { 13. } else { 17. },
+                            theme.accent,
                         );
-                        canvas.text(
-                            title.x + 50.,
-                            title.y + 26.,
-                            &format!(
-                                "{} {}  ·  {}",
-                                group.cards.len(),
-                                if group.cards.len() == 1 {
-                                    "window"
+                        let set = group
+                            .set
+                            .as_deref()
+                            .map(|id| snapshot.set_name(id))
+                            .unwrap_or("Shared");
+                        let visible = if group.set.as_deref() == Some(snapshot.current_set.as_str())
+                            || group.set.is_none()
+                        {
+                            snapshot
+                                .monitors
+                                .iter()
+                                .find(|m| m.active_workspace.id == group.id)
+                                .map(|m| m.name.as_str())
+                        } else {
+                            group
+                                .set
+                                .as_deref()
+                                .and_then(|id| snapshot.sets.iter().find(|s| s.id == id))
+                                .and_then(|s| {
+                                    s.monitors.iter().find(|(_, slot)| **slot == group.name)
+                                })
+                                .map(|(monitor, _)| monitor.as_str())
+                        };
+                        let placement = visible
+                            .map(|m| {
+                                format!(
+                                    "{}: {m}",
+                                    if group.set.as_deref() == Some(snapshot.current_set.as_str()) {
+                                        "On"
+                                    } else {
+                                        "Saved"
+                                    }
+                                )
+                            })
+                            .unwrap_or_else(|| group.monitor.clone());
+                        if compact {
+                            canvas.text(
+                                title.x + 34.,
+                                title.y + 5.,
+                                &format!("{} win · {}", group.cards.len(), placement),
+                                11.,
+                                theme.muted,
+                                title.w - 36.,
+                            );
+                        } else {
+                            canvas.text(
+                                title.x + 50.,
+                                title.y + 1.,
+                                &if ui.set_panels.is_empty() {
+                                    format!("{} · Workspace {}", set, group.name)
                                 } else {
-                                    "windows"
+                                    format!("Workspace {}", group.name)
                                 },
-                                group.monitor
-                            ),
-                            12.,
-                            mix(theme.base, theme.muted, 0.75),
-                            title.w - 160.,
-                        );
-                        if current && title.w > 260. {
-                            let pill = Rect::new(title.x + title.w - 85., title.y + 10., 80., 27.);
-                            canvas.rounded(pill, mix(theme.surface, theme.accent, 0.12), 13.5);
-                            canvas.centered(pill, "Current", 12., theme.accent);
+                                16.,
+                                theme.text,
+                                title.w - 52.,
+                            );
+                            canvas.text(
+                                title.x + 50.,
+                                title.y + 27.,
+                                &format!(
+                                    "{} windows  ·  {}{}",
+                                    group.cards.len(),
+                                    placement,
+                                    if current { "  ·  Current" } else { "" }
+                                ),
+                                12.,
+                                theme.muted,
+                                title.w - 52.,
+                            );
                         }
                         ui.hits.push((title, Action::Workspace(group.id)));
                         canvas.rounded(group.canvas, mix(theme.base, theme.surface, 0.12), 12.);
@@ -366,29 +535,19 @@ impl Renderer {
                             captures,
                             card,
                             ui.selected,
-                            ui.flat,
+                            ui.mode == ViewMode::Windows,
                         );
                         ui.hits.push((card.rect, Action::Select(card.index)));
-                        if card.rect.w > 170. && card.rect.h > 110. {
+                        if card.rect.w > 170. && card.rect.h >= 120. {
                             let inspect = Rect::new(
-                                card.rect.x + card.rect.w - 66.,
+                                card.rect.x + card.rect.w - 36.,
                                 card.rect.y + card.rect.h - 30.,
-                                58.,
+                                28.,
                                 23.,
                             );
-                            canvas.button(inspect, "Read", false);
+                            canvas.expand_button(inspect);
                             ui.hits.push((inspect, Action::Inspect(card.index)));
                         }
-                    }
-                    if group.cards.is_empty() {
-                        canvas.text(
-                            group.canvas.x + 15.,
-                            group.canvas.y + 15.,
-                            "Empty workspace",
-                            18.,
-                            theme.muted,
-                            group.canvas.w - 30.,
-                        );
                     }
                 }
                 if ui.groups.is_empty() {
@@ -402,11 +561,18 @@ impl Renderer {
                 let mut x = 32.;
                 for (key, hint, step) in [
                     ("1–9", "Focus window", 182.),
-                    ("Space", "Read", 132.),
-                    ("Tab", "Change view", 174.),
+                    ("Space", "Expand", 150.),
+                    ("Tab/Shift+Tab", "View", 205.),
+                    ("PgUp/PgDn", "Browse", 210.),
+                    ("Ctrl+A", "All sets", 160.),
                     ("Esc", "Back", 110.),
                 ] {
-                    let key_width = if key == "Space" { 56. } else { 42. };
+                    let key_width = match key {
+                        "Tab/Shift+Tab" => 110.,
+                        "PgUp/PgDn" => 90.,
+                        "Space" | "Ctrl+A" => 56.,
+                        _ => 42.,
+                    };
                     let key_rect = Rect::new(x, h - 46., key_width, 26.);
                     canvas.rounded(key_rect, mix(theme.base, theme.surface, 0.75), 7.);
                     canvas.centered(key_rect, key, 12., theme.text);
@@ -609,6 +775,37 @@ impl Canvas<'_> {
             cursor += metrics.advance_width.round() as i32;
         }
     }
+    fn expand_button(&mut self, r: Rect) {
+        self.rounded(r, mix(self.theme.surface, self.theme.accent, 0.08), 7.);
+        let color = self.theme.text;
+        for (x, y, right, bottom) in [
+            (r.x + 7., r.y + 6., false, false),
+            (r.x + r.w - 7., r.y + 6., true, false),
+            (r.x + 7., r.y + r.h - 6., false, true),
+            (r.x + r.w - 7., r.y + r.h - 6., true, true),
+        ] {
+            self.rounded(
+                Rect::new(
+                    x - if right { 5. } else { 0. },
+                    y - if bottom { 1.5 } else { 0. },
+                    5.,
+                    1.5,
+                ),
+                color,
+                0.75,
+            );
+            self.rounded(
+                Rect::new(
+                    x - if right { 1.5 } else { 0. },
+                    y - if bottom { 5. } else { 0. },
+                    1.5,
+                    5.,
+                ),
+                color,
+                0.75,
+            );
+        }
+    }
     fn button(&mut self, r: Rect, label: &str, active: bool) {
         self.rounded(
             r,
@@ -683,6 +880,25 @@ fn paint_card(
         },
         radius,
     );
+    if r.h < 32. || r.w < 60. {
+        canvas.centered(
+            r,
+            &card.number.to_string(),
+            (r.h - 2.).clamp(6., 12.),
+            if selected { theme.accent } else { theme.text },
+        );
+        canvas.outline(
+            r,
+            if selected {
+                theme.accent
+            } else {
+                theme.overlay
+            },
+            radius.min(r.h / 2.),
+            1.,
+        );
+        return;
+    }
     let compact = r.h < 120. || r.w < 150.;
     let header = if compact { 26. } else { 38. };
     let footer = if compact { 0. } else { 34. };
@@ -743,7 +959,7 @@ fn paint_card(
     if !compact {
         let states = client.states();
         let context = if flat {
-            format!("Workspace {} · {}", client.workspace.name, client.title)
+            format!("{} · {}", snapshot.context(&client.workspace), client.title)
         } else if states.is_empty() {
             format!("{} · {}", card.slot, client.title)
         } else {
@@ -755,7 +971,7 @@ fn paint_card(
             &context,
             12.,
             mix(theme.surface, theme.muted, 0.85),
-            r.w - if r.w > 170. { 86. } else { 20. },
+            r.w - if r.w > 170. { 50. } else { 20. },
         );
     }
     if card.overlap && r.w > 230. && !compact {
@@ -906,6 +1122,33 @@ pub struct CaptureInfo<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sequential_navigation_wraps_and_respects_scope_and_search() {
+        let mut ui = Ui {
+            snapshot: Some(crate::layout::tests::sets_fixture()),
+            selected: 1,
+            ..Ui::default()
+        };
+        ui.browse(Browse::Next);
+        assert_eq!(ui.selected, 0);
+        ui.browse(Browse::Previous);
+        assert_eq!(ui.selected, 1);
+        ui.all_sets = true;
+        ui.browse(Browse::Last);
+        assert_eq!(ui.selected, 2);
+        ui.browse(Browse::First);
+        assert_eq!(ui.selected, 0);
+        ui.query = "School".into();
+        ui.pan = [100., 50.];
+        ui.browse(Browse::Next);
+        assert_eq!(ui.selected, 2);
+        assert_eq!(ui.pan, [0., 0.]);
+        ui.browse(Browse::Previous);
+        assert_eq!(ui.selected, 2);
+        ui.query = "No matching window".into();
+        ui.browse(Browse::Last); // Empty results must not index or wrap an empty list.
+        assert_eq!(ui.selected, 2);
+    }
     #[test]
     fn rounded_previews_preserve_background_corners_and_source_interior() {
         for scale in [1, 2] {

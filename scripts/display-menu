@@ -87,6 +87,11 @@ normal_mode() {
     enable_external "$output"
   done <<<"$external_names"
 
+  local layout_file="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitor-layout.conf"
+  if [[ -f "$layout_file" ]]; then
+    hyprctl keyword source "$layout_file" >/dev/null
+  fi
+
   save_profile "normal"
   notify "Normal extended layout"
 }
@@ -197,7 +202,7 @@ case "${1:-menu}" in
     ;;
 esac
 
-options=("Normal extended layout")
+options=("Arrange monitor layout" "Normal extended layout")
 
 if is_connected "$internal"; then
   options+=("Laptop screen only")
@@ -216,6 +221,9 @@ selection="$(
 )"
 
 case "$selection" in
+  "Arrange monitor layout")
+    exec ghostty -e "$HOME/.local/bin/monitor-layout"
+    ;;
   "Normal extended layout")
     normal_mode
     ;;

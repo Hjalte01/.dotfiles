@@ -19,16 +19,22 @@ local function find_readme()
     return name:lower() == "readme.md"
   end, {
     upward = true,
-    path = vim.api.nvim_buf_get_name(0),
+    path = vim.fs.dirname(vim.api.nvim_buf_get_name(0)) or vim.fn.getcwd(),
   })[1]
 
   return path
 end
 
 vim.api.nvim_buf_create_user_command(0, "MarkdownPreview", function()
+  require("utils.markdown_preview").open()
+end, {
+  desc = "Preview Markdown as PDF in Zathura (refreshes on save)",
+})
+
+vim.api.nvim_buf_create_user_command(0, "MarkdownPreviewTerminal", function()
   preview_with_glow()
 end, {
-  desc = "Preview Markdown with Glow",
+  desc = "Preview Markdown with Glow inside Neovim",
 })
 
 vim.api.nvim_buf_create_user_command(0, "ReadmePreview", function()
@@ -38,19 +44,21 @@ vim.api.nvim_buf_create_user_command(0, "ReadmePreview", function()
     return
   end
 
-  preview_with_glow(readme)
+  require("utils.markdown_preview").open(vim.fn.bufadd(readme))
 end, {
-  desc = "Preview nearest README.md with Glow",
+  desc = "Preview nearest README.md as PDF in Zathura",
 })
 
-vim.keymap.set("n", "<leader>r", preview_with_glow, {
+vim.keymap.set("n", "<leader>r", function()
+  vim.cmd.MarkdownPreview()
+end, {
   buffer = true,
-  desc = "Preview Markdown with Glow",
+  desc = "Preview Markdown as PDF in Zathura",
 })
 
 vim.keymap.set("n", "<leader>R", function()
   vim.cmd.ReadmePreview()
 end, {
   buffer = true,
-  desc = "Preview README.md with Glow",
+  desc = "Preview README.md as PDF in Zathura",
 })

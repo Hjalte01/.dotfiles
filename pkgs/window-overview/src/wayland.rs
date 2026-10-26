@@ -1,6 +1,6 @@
 use crate::{
-    hypr, layout,
-    render::{Action, Capture, CaptureInfo, Renderer, Ui},
+    hypr,
+    render::{Action, Browse, Capture, CaptureInfo, Renderer, Ui, ViewMode},
 };
 use anyhow::{bail, Context, Result};
 use memmap2::MmapMut;
@@ -156,7 +156,11 @@ impl App {
         let scale = target.scale.ceil().max(1.) as u32;
         let size = target.logical_size();
         self.hide();
+        let mode = self.ui.mode;
+        let all_sets = self.ui.all_sets;
         self.ui = Ui {
+            mode,
+            all_sets,
             selected: snapshot
                 .clients
                 .iter()
@@ -338,6 +342,9 @@ impl App {
     }
     fn focus(&mut self, index: usize) -> Result<()> {
         let snapshot = self.ui.snapshot.as_ref().context("No overview open")?;
+        if !self.ui.indices().contains(&index) {
+            bail!("No matching window selected");
+        }
         let client = snapshot.clients.get(index).context("No such window")?;
         self.pending_focus = Some((client.address.clone(), snapshot.monitor.clone()));
         self.hide();
@@ -348,7 +355,7 @@ impl App {
             .ui
             .snapshot
             .as_ref()
-            .is_some_and(|s| index < s.clients.len())
+            .is_some_and(|s| index < s.clients.len() && self.ui.indices().contains(&index))
         {
             self.ui.selected = index;
             self.ui.inspect = true;
@@ -363,15 +370,24 @@ impl App {
             Action::Inspect(i) => self.inspect(i),
             Action::Workspace(id) => {
                 self.ui.workspace = Some(id);
-                self.ui.flat = false;
+                if self.ui.mode == ViewMode::Windows {
+                    self.ui.mode = ViewMode::Workspaces;
+                }
             }
             Action::All => {
                 self.ui.workspace = None;
                 self.ui.query.clear();
             }
-            Action::Mode => {
+            Action::Mode => return self.act(Action::View(self.ui.mode.next())),
+            Action::View(mode) => {
                 self.ui.inspect = false;
-                self.ui.flat = !self.ui.flat;
+                self.ui.mode = mode;
+                self.ui.workspace = None;
+            }
+            Action::Scope(all) => {
+                self.ui.all_sets = all;
+                self.ui.workspace = None;
+                self.ui.inspect = false;
             }
             Action::Back => self.ui.inspect = false,
             Action::Native => {
@@ -384,26 +400,20 @@ impl App {
             }
             Action::Focus => self.focus(self.ui.selected)?,
         }
+        self.number.clear();
+        self.number_deadline = None;
         if self.visible() {
             self.dirty = true;
         }
         Ok(())
     }
     fn navigate(&mut self, direction: u32) {
-        let Some(snapshot) = &self.ui.snapshot else {
-            return;
-        };
-        let indices = layout::matching(snapshot, &self.ui.query, self.ui.workspace);
         if self.ui.inspect {
-            if let Some(position) = indices.iter().position(|&i| i == self.ui.selected) {
-                let delta = if direction == 105 || direction == 103 {
-                    indices.len().saturating_sub(1)
-                } else {
-                    1
-                };
-                self.ui.selected = indices[(position + delta) % indices.len()];
-                self.ui.pan = [0., 0.];
-            }
+            self.ui.browse(if direction == 105 || direction == 103 {
+                Browse::Previous
+            } else {
+                Browse::Next
+            });
         } else {
             let cards: Vec<_> = self.ui.groups.iter().flat_map(|g| &g.cards).collect();
             if let Some(current) = cards.iter().find(|c| c.index == self.ui.selected) {
@@ -435,18 +445,22 @@ impl App {
         self.dirty = true;
     }
     fn number(&mut self, ch: char) -> Result<()> {
-        let Some(snapshot) = &self.ui.snapshot else {
+        if self.ui.snapshot.is_none() {
             return Ok(());
-        };
+        }
         if self.number.is_empty() && ch == '0' {
-            if snapshot.clients.len() >= 10 {
+            if self.ui.indices().contains(&9) {
                 self.focus(9)?;
             }
             return Ok(());
         }
         self.number.push(ch);
         let prefix = &self.number;
-        let matches: Vec<_> = (1..=snapshot.clients.len())
+        let matches: Vec<_> = self
+            .ui
+            .indices()
+            .into_iter()
+            .map(|i| i + 1)
             .filter(|i| i.to_string().starts_with(prefix))
             .collect();
         if matches.is_empty() {
@@ -460,26 +474,39 @@ impl App {
         }
         Ok(())
     }
+    fn back(&mut self) {
+        self.number.clear();
+        self.number_deadline = None;
+        if self.ui.inspect {
+            self.ui.inspect = false;
+        } else if !self.ui.query.is_empty() {
+            self.ui.query.clear();
+        } else if self.ui.workspace.is_some() {
+            self.ui.workspace = None;
+        } else {
+            self.hide();
+        }
+    }
     fn key(&mut self, key: u32, text: String, ctrl: bool, alt: bool) -> Result<()> {
         if !self.visible() {
             return Ok(());
         }
+        if ctrl
+            || matches!(key, 1 | 14 | 15 | 353 | 102..=109)
+            || text.chars().any(|c| !c.is_control() && !c.is_ascii_digit())
+        {
+            self.number.clear();
+            self.number_deadline = None;
+        }
         match key {
-            1 => {
-                if self.ui.inspect {
-                    self.ui.inspect = false;
-                } else if !self.ui.query.is_empty() {
-                    self.ui.query.clear();
-                } else if self.ui.workspace.is_some() {
-                    self.ui.workspace = None;
-                } else {
-                    self.hide();
-                }
-            }
-            15 => {
-                self.ui.inspect = false;
-                self.ui.flat = !self.ui.flat;
-            }
+            1 => self.back(),
+            105 if alt => self.back(),
+            // With two views, forward and backward both select the other view.
+            15 | 353 => self.act(Action::Mode)?,
+            102 => self.ui.browse(Browse::First),
+            107 => self.ui.browse(Browse::Last),
+            104 => self.ui.browse(Browse::Previous),
+            109 => self.ui.browse(Browse::Next),
             28 | 96 => {
                 if let Ok(n) = self.number.parse::<usize>() {
                     if n > 0 {
@@ -500,10 +527,24 @@ impl App {
                 self.ui.pan = [0., 0.];
             }
             105 | 106 | 103 | 108 => self.navigate(key),
-            33 if ctrl => self.ui.numbers_in_search = !self.ui.numbers_in_search,
+            30 if ctrl && !self.ui.inspect => self.act(Action::Scope(!self.ui.all_sets))?,
+            33 | 38 if ctrl && !self.ui.inspect => self.ui.numbers_in_search = true,
             22 if ctrl && !self.ui.inspect => self.ui.query.clear(),
             14 if !self.ui.inspect => {
-                self.ui.query.pop();
+                if ctrl {
+                    self.ui.query = self.ui.query.trim_end().to_owned();
+                    while self
+                        .ui
+                        .query
+                        .chars()
+                        .last()
+                        .is_some_and(|c| !c.is_whitespace())
+                    {
+                        self.ui.query.pop();
+                    }
+                } else {
+                    self.ui.query.pop();
+                }
                 self.number.clear();
             }
             53 if !self.ui.inspect && self.ui.query.is_empty() => self.ui.numbers_in_search = true,
@@ -553,6 +594,17 @@ impl App {
             }
             "hide" => self.hide(),
             "cycle" => self.act(Action::Mode)?,
+            "view" => self.act(Action::View(match arg {
+                "workspaces" => ViewMode::Workspaces,
+                "windows" => ViewMode::Windows,
+                _ => bail!("Use view workspaces or windows"),
+            }))?,
+            "scope" => self.act(Action::Scope(match arg {
+                "all" => true,
+                "current" => false,
+                _ => bail!("Use scope current or all"),
+            }))?,
+            "back" => self.act(Action::All)?,
             "inspect" => self.inspect(arg.parse::<usize>()?.saturating_sub(1)),
             "select" => self.focus(
                 arg.parse::<usize>()?
@@ -582,9 +634,9 @@ impl App {
             "state" => {
                 return Ok(serde_json::to_string(&serde_json::json!({
                     "visible":self.visible(),"monitor":self.ui.snapshot.as_ref().map(|s|&s.monitor),"allMonitors":true,
-                    "viewMode":if self.ui.flat{"windows"}else{"workspaces"},"query":self.ui.query,"selected":self.ui.selected+1,
+                    "viewMode":self.ui.mode,"allSets":self.ui.all_sets,"query":self.ui.query,"selected":self.ui.selected+1,
                     "inspection":{"visible":self.ui.inspect,"native":self.ui.native,"pan":self.ui.pan},
-                    "size":[self.width,self.height],"scale":self.scale,"groups":self.ui.groups,
+                    "size":[self.width,self.height],"scale":self.scale,"groups":self.ui.groups,"setPanels":self.ui.set_panels,
                     "snapshot":self.ui.snapshot,"pendingCaptures":self.pending.len(),"number":self.number,
                     "captures":self.captures.iter().map(|(address,c)|CaptureInfo{address,width:c.width,height:c.height,generation:c.generation}).collect::<Vec<_>>(),
                     "renderMs":self.renderer.last_render_ms,"error":self.ui.error,
@@ -813,7 +865,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
                 state: WEnum::Value(wl_keyboard::KeyState::Pressed),
                 ..
             } => {
-                let (text, ctrl, alt, symbol) = state
+                let (text, ctrl, alt, shift, symbol) = state
                     .xkb
                     .as_ref()
                     .map(|xkb| {
@@ -821,29 +873,12 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
                             xkb.key_get_utf8((key + 8).into()),
                             xkb.mod_name_is_active(xkb::MOD_NAME_CTRL, xkb::STATE_MODS_EFFECTIVE),
                             xkb.mod_name_is_active(xkb::MOD_NAME_ALT, xkb::STATE_MODS_EFFECTIVE),
+                            xkb.mod_name_is_active(xkb::MOD_NAME_SHIFT, xkb::STATE_MODS_EFFECTIVE),
                             xkb.key_get_one_sym((key + 8).into()).raw(),
                         )
                     })
                     .unwrap_or_default();
-                use xkb::keysyms::*;
-                #[allow(non_upper_case_globals)]
-                let key = match symbol {
-                    KEY_Escape => 1,
-                    KEY_Tab | KEY_ISO_Left_Tab => 15,
-                    KEY_Return | KEY_KP_Enter => 28,
-                    KEY_space => 57,
-                    KEY_BackSpace => 14,
-                    KEY_Left => 105,
-                    KEY_Right => 106,
-                    KEY_Up => 103,
-                    KEY_Down => 108,
-                    KEY_1 if ctrl => 2,
-                    KEY_0 if ctrl => 11,
-                    KEY_f | KEY_F if ctrl => 33,
-                    KEY_u | KEY_U if ctrl => 22,
-                    KEY_slash => 53,
-                    _ => 0,
-                };
+                let key = shortcut_key(symbol, ctrl, shift);
                 let result = state.key(key, text, ctrl, alt);
                 state.error(result);
             }
@@ -1109,6 +1144,37 @@ delegate_noop!(App: ignore wl_surface::WlSurface);
 delegate_noop!(App: ignore layer_shell::ZwlrLayerShellV1);
 delegate_noop!(App: ignore export_manager::HyprlandToplevelExportManagerV1);
 
+// Resolve shortcuts from layout-aware symbols, including Shift+Tab and Ctrl+A.
+fn shortcut_key(symbol: u32, ctrl: bool, shift: bool) -> u32 {
+    use xkb::keysyms::*;
+    #[allow(non_upper_case_globals)]
+    match symbol {
+        KEY_Escape => 1,
+        KEY_ISO_Left_Tab => 353,
+        KEY_Tab if shift => 353,
+        KEY_Tab => 15,
+        KEY_Return | KEY_KP_Enter => 28,
+        KEY_space => 57,
+        KEY_BackSpace => 14,
+        KEY_Left => 105,
+        KEY_Right => 106,
+        KEY_Up => 103,
+        KEY_Down => 108,
+        KEY_Home => 102,
+        KEY_End => 107,
+        KEY_Page_Up => 104,
+        KEY_Page_Down => 109,
+        KEY_1 if ctrl => 2,
+        KEY_0 if ctrl => 11,
+        KEY_a | KEY_A if ctrl => 30,
+        KEY_f | KEY_F if ctrl => 33,
+        KEY_l | KEY_L if ctrl => 38,
+        KEY_u | KEY_U if ctrl => 22,
+        KEY_slash => 53,
+        _ => 0,
+    }
+}
+
 fn load_keymap(fd: OwnedFd, size: u32) -> Result<xkb::State> {
     if size == 0 || size > 16 * 1024 * 1024 {
         bail!("Invalid keymap size {size}");
@@ -1136,6 +1202,22 @@ fn load_keymap(fd: OwnedFd, size: u32) -> Result<xkb::State> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn common_shortcuts_resolve_from_keyboard_symbols() {
+        use xkb::keysyms::*;
+        assert_eq!(shortcut_key(KEY_a, true, false), 30);
+        assert_eq!(shortcut_key(KEY_A, true, true), 30);
+        assert_eq!(shortcut_key(KEY_a, false, false), 0);
+        assert_eq!(shortcut_key(KEY_Tab, false, false), 15);
+        assert_eq!(shortcut_key(KEY_Tab, true, false), 15);
+        assert_eq!(shortcut_key(KEY_Tab, false, true), 353);
+        assert_eq!(shortcut_key(KEY_ISO_Left_Tab, true, true), 353);
+        assert_eq!(shortcut_key(KEY_l, true, false), 38);
+        assert_eq!(shortcut_key(KEY_Page_Up, false, false), 104);
+        assert_eq!(shortcut_key(KEY_Page_Down, false, false), 109);
+        assert_eq!(shortcut_key(KEY_Home, false, false), 102);
+        assert_eq!(shortcut_key(KEY_End, false, false), 107);
+    }
     #[test]
     fn keymap_mapping_ignores_the_shared_descriptor_offset() {
         let text = b"xkb_keymap { xkb_keycodes { minimum=8; maximum=9; <ESC>=9; }; xkb_types { type \"ONE_LEVEL\" { modifiers=None; map[None]=Level1; }; }; xkb_compatibility {}; xkb_symbols { key <ESC> { [ Escape ] }; }; };\0";

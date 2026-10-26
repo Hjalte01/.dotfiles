@@ -1,4 +1,4 @@
-"""Local Hendrix commands. Running the TUI does not connect automatically."""
+"""Local Hendrix commands. The TUI connects and loads GPU availability on startup."""
 from __future__ import annotations
 
 import argparse
@@ -69,7 +69,17 @@ def main():
             return 0
         if args.action == 'tui':
             from .app import HendrixApp
-            HendrixApp(project=args.project).run()
+            app = HendrixApp(project=args.project)
+            # Authenticate before Textual takes over the terminal, so sudo/MFA
+            # prompts work normally. Failure still leaves a usable TUI with c retry.
+            try:
+                connect(app.backend)
+                app.startup_connected = True
+            except (Error, OSError, ValueError, subprocess.SubprocessError) as exc:
+                app.startup_error = str(exc)
+            except KeyboardInterrupt:
+                app.startup_error = 'Connection cancelled · c to retry.'
+            app.run()
             return 0
         profiles = load_profiles()
         profile = next((p for p in profiles if p.name == args.project), None) if args.project else profiles[0]

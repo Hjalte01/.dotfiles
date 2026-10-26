@@ -1,12 +1,12 @@
-"""Textual frontend. Explicit connection, modest polling, and bounded logs."""
+"""Textual frontend. Automatic startup connection, modest polling, and bounded logs."""
 from __future__ import annotations
 
 import asyncio
 import datetime as dt
 import os
+import json
 import shutil
 import re
-import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -19,14 +19,66 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (Button, DataTable, Footer, Header, Input, Label, RichLog,
-                             Select, Static, TabbedContent, TabPane, OptionList, Collapsible)
+                             Select, Static, TabbedContent, TabPane, OptionList, SelectionList)
 
 from dotfiles_theme import install as install_theme, color as theme_color
 
 from . import core
-from .core import (Backend, CONFIG, Error, Profile, load_profiles, save_profiles,
-                   summarize, validate_resources, visible_gpu_nodes, gpu_row_order, GPU_PREFERENCE, free_total, request_groups, gpu_request, atomic_json)
+from .core import (Backend, Error, Profile, load_profiles, save_profiles,
+                   summarize, visible_gpu_nodes, gpu_row_order, GPU_PREFERENCE, free_total, request_groups, gpu_request, atomic_json)
 from .cli import connect, edit_profiles, setup_ssh, vpn
+
+
+# Stable column keys are shared by rendering, the chooser and saved preferences.
+TABLE_COLUMNS = {
+    'models': [('model', 'Model', 12), ('gpu', 'Free GPUs', 18), ('vram', 'VRAM/GPU', 12),
+               ('cpu', 'CPU', 13), ('ram', 'Host RAM GiB', 16),
+               ('healthy', 'Healthy free', 12), ('pending', 'Pending tasks', 16)],
+    'nodes': [('node', 'Node', None), ('model', 'Model', 9), ('gpu', 'Free GPUs', 18),
+              ('state', 'State', 9), ('cpu', 'CPU', 8), ('ram', 'RAM GiB', 14)],
+    'jobs': [('id', 'Job', None), ('run', 'Run', None), ('state', 'State', None),
+             ('elapsed', 'Elapsed', None), ('reason', 'Node / reason', None),
+             ('project', 'Project', None), ('limit', 'Limit', None),
+             ('gpu', 'GPU', None), ('exit', 'Exit', None)],
+    'cluster-queue': [('id', 'Job / array', 27), ('gpu', 'GPU request', 27),
+                      ('tasks', 'Tasks / cap', 16), ('reason', 'Reason (raw)', 27),
+                      ('cpus', 'CPUs/job', 9), ('memory', 'Host RAM min', 16),
+                      ('limit', 'Limit', 13), ('submitted', 'Submitted (local)', 22),
+                      ('start', 'Scheduler start (local)', 22), ('partition', 'Partition', 22)],
+}
+TABLE_NAMES = {'models': 'GPU models', 'nodes': 'GPU nodes', 'jobs': 'Jobs',
+               'cluster-queue': 'Cluster queue'}
+REQUIRED_COLUMNS = {'models': {'model', 'gpu'}, 'nodes': {'node', 'model', 'gpu'},
+                    'jobs': {'id', 'run', 'state'}, 'cluster-queue': {'id', 'gpu'}}
+COMPACT_COLUMNS = {'models': {'model', 'gpu', 'vram'},
+                   'nodes': {'node', 'model', 'gpu', 'state'},
+                   'jobs': {'id', 'run', 'state', 'elapsed', 'reason'},
+                   'cluster-queue': {'id', 'gpu', 'tasks', 'reason'}}
+
+
+def load_columns():
+    choices = {key: set(value) for key, value in COMPACT_COLUMNS.items()}
+    try:
+        saved = json.loads((core.CONFIG / 'ui.json').read_text())
+        if isinstance(saved, dict):
+            for table, columns in saved.items():
+                if table in choices and isinstance(columns, list):
+                    valid = {key for key, _, _ in TABLE_COLUMNS[table]}
+                    choices[table] = {key for key in columns if isinstance(key, str)} & valid | REQUIRED_COLUMNS[table]
+    except (OSError, ValueError):
+        pass
+    return choices
+
+
+def availability_bar(free, total):
+    """Slurm unallocated share, with exact counts and an explicit unknown state."""
+    width = 8
+    known = free is not None and total is not None and total > 0
+    filled = round(width * min(1, max(0, free / total))) if known else 0
+    result = Text('█' * filled, style=theme_color('green'))
+    result.append(('─' * (width - filled)) if known else '?' * width, style=theme_color('muted'))
+    result.append(' ' + free_total(free, total), style=theme_color('green') if known and free > 0 else theme_color('muted'))
+    return result
 
 
 class NavigationTable(DataTable):
@@ -102,14 +154,14 @@ class Help(ModalScreen):
             yield Static('Hendrix · Help', classes='dialog-title')
             yield Static(
                 'NAVIGATION\n'
-                '1: GPU models · 2: GPU nodes · 3: Projects · 4: Jobs · 5: Logs · 6: Cluster queue\n'
+                '1: GPU models · 2: GPU nodes · 3: Jobs · 4: Logs · 5: Projects · 6: Cluster queue\n'
                 'hjkl: table arrows and menu navigation · Tab / Shift+Tab: next / previous control\n'
                 'g/G: first/last table row · Ctrl+d/u: page down/up\n'
                 'Alt+h/l: change tabs · /: search · Esc: leave search\n'
-                'c: connect · r: refresh · s: sync · p: sync preview · b: submit\n'
+                'c: reconnect · r: refresh · C: choose table columns\n'
                 'Shift+L: logs · q: quit · ?: this help\n\n'
                 'GPU VIEW\n'
-                'All resource counts are free(total). For example, 4(6) means four free of six.\n'
+                'GPU bars show the free share; resource counts are free(total). For example, 4(6) means four free of six.\n'
                 'GPU free counts come from Slurm allocations. CPU free = effective CPUs − CPUAlloc.\n'
                 'RAM GiB is configured host RAM minus Slurm-allocated RAM, not GPU VRAM or OS FreeMem.\n'
                 'Unknown counters are ?. CPU/RAM belong to the node and are shared by its GPUs;\n'
@@ -123,7 +175,8 @@ class Help(ModalScreen):
                 'Reasons shows the number of visible nodes with an explanation; it starts hidden.\n'
                 'Click a column heading to sort; click again to reverse. = restores model preference.\n'
                 'Default preference: H100, A100, L40S, A40, RTX, Titans. This is not a benchmark.\n'
-                'Compare memory fit, measured training speed and queue wait when choosing hardware.\n\n'
+                'C / Columns: choose optional columns per table; Compact/All presets are available.\n'
+                'Choices are saved locally; CPU/RAM and queue details can be shown when needed.\n\n'
                 'QUEUE AND COMPARISON\n'
                 '6: visible pending demand by partition; default gpu, or all visible partitions.\n'
                 'Compact arrays show pending task counts and concurrency caps without expanding tasks.\n'
@@ -131,16 +184,6 @@ class Help(ModalScreen):
                 'Other scheduler reasons stay explicit; explanations preserve the raw Slurm reason.\n'
                 'Any GPU demand is separate. Counts are visible demand, never jobs ahead of you.\n'
                 'Click Pending tasks to sort; GPU sorts free capacity; = restores model preference.\n'
-                'In the launch form, c / Compare GPUs opens a comparison for the current script/resources.\n'
-                'Enter minimum nominal GB of VRAM per GPU including headroom, or leave it unknown.\n'
-                'Compare sends the actual local script to sbatch --test-only, only when pressed.\n'
-                'No job, sync, snapshot, history or settings write is made by comparison.\n'
-                'A100 is 40/80 GB; aliases and installed variants may be unknown. Host RAM is separate.\n'
-                'Observed fit checks GPU/CPU/RAM together on a healthy node; complex topology is unknown.\n'
-                'A star marks earliest predicted start among choices likely to meet entered VRAM.\n'
-                'Speed is unmeasured; start estimates can change and do not predict completion.\n'
-                'u / Use this model selects one model/count. Changing settings/script invalidates estimates.\n'
-                'NVIDIA specifications describe hardware support, not installed NVLink connectivity.\n\n'
                 'SELECTION AND COPY\n'
                 'v: mark/unmark the focused node or model · Shift+V: clear marks.\n'
                 'y: copy a one-GPU model request for the marked rows or focused row/model.\n'
@@ -150,13 +193,8 @@ class Help(ModalScreen):
                 'A model request leaves node choice to Slurm. An exact-node request may wait longer.\n'
                 'Copies are saved locally in ~/.local/state/hendrix/copied-request.json as well.\n'
                 'Selected rows stay marked across filters; refreshed inventory removes vanished rows.\n\n'
-                'WORKFLOW\n'
-                'b uses marked GPU models, or the focused GPU row. Space toggles models in the form.\n'
-                'h/l or −/+: choose GPU count per model. Each selected model launches a separate job.\n'
-                'a: advanced settings · b / Ctrl+Enter: review · Esc: leave field / close form\n'
-                'CPU/RAM/time/partition and GPU counts are remembered per project and script.\n'
-                'Sync updates your source mirror; submit makes a separate source snapshot.\n'
-                'Datasets and Python environments remain shared. Opening the app does not connect.\n'
+                'CONNECTION\n'
+                'hendrix tui connects automatically and loads GPU availability.\n'
                 'Desktop Connect reuses the saved KUnet password for SSH after session/key checks.\n'
                 'Save login password updates the VPN/SSH password; hendrix totp configures optional automatic VPN codes.\n'
                 'Jobs poll every 30s, nodes/cluster queue every 60s; filters use cached data.\n'
@@ -279,492 +317,64 @@ class AddProject(ModalScreen[Profile | None]):
         self.dismiss(None)
 
 
-class GPUChoices(NavigationTable):
-    BINDINGS = [Binding('space,enter', 'toggle_gpu', show=False),
-                Binding('+,equals,l', 'increase_gpu', show=False),
-                Binding('-,h', 'decrease_gpu', show=False)]
-
-    def __init__(self, models, counts, inventory, **kwargs):
-        super().__init__(cursor_type='row', **kwargs)
-        self.models, self.counts, self.inventory = models, counts, inventory
-
-    def on_mount(self):
-        self.add_columns('Use', 'GPU model', 'GPUs / job', 'Free(total)', 'Max / job')
-        for model in self.models:
-            totals = self.inventory.get(model)
-            self.add_row('', model, '', free_total(*totals[:2]) if totals else '?',
-                         str(self.limit(model)), key=model)
-        self.styles.height = min(8, self.row_count + 1)
-        self.refresh_counts()
-
-    def limit(self, model):
-        totals = self.inventory.get(model)
-        return min(8, totals[2]) if totals else 8
-
-    def refresh_counts(self):
-        for model in self.models:
-            count = self.counts.get(model, 0)
-            self.update_cell(model, self.ordered_columns[0].key, '✓' if count else '·')
-            self.update_cell(model, self.ordered_columns[2].key, str(count))
-
-    def current_model(self):
-        return self.models[self.cursor_row] if self.models else None
-
-    def action_toggle_gpu(self):
-        model = self.current_model()
-        if model:
-            self.counts[model] = 0 if self.counts.get(model) else 1
-            self.refresh_counts()
-
-    def action_increase_gpu(self):
-        model = self.current_model()
-        if model:
-            self.counts[model] = min(self.limit(model), self.counts.get(model, 0) + 1)
-            self.refresh_counts()
-
-    def action_decrease_gpu(self):
-        model = self.current_model()
-        if model:
-            self.counts[model] = max(0, self.counts.get(model, 0) - 1)
-            self.refresh_counts()
-
-
-class SubmitForm(ModalScreen[tuple[dict, list[dict]] | None]):
-    BINDINGS = [Binding('a', 'advanced', 'Advanced', show=False),
-                Binding('c', 'compare', 'Compare GPUs', show=False),
-                Binding('b,ctrl+enter', 'review', 'Review', show=False)]
-
-    def __init__(self, profile, models, chosen=None, selected=None, inventory=None,
-                 backend=None, nodes=None, queue=None, freshness=''):
+class ColumnChooser(ModalScreen[dict | None]):
+    def __init__(self, choices, table):
         super().__init__()
-        self.profile = profile
-        self.settings = core.load_launch_settings()
-        last = self.settings['last_presets'].get(core.launch_key(profile, {'script': '', 'args': []}))
-        self.preset_index = next((i for i, p in enumerate(profile.presets)
-                                  if core.launch_key(profile, p) == last), 0)
-        self.auto_run_name = core.default_run_name(profile, profile.presets[self.preset_index])
-        self.run_name = self.auto_run_name
-        self.selection = list(selected or [])
-        saved = self.saved_requests(self.preset_index)
-        if not self.selection and chosen and not saved:
-            self.selection = [chosen]
-        self.models = sorted(set(models) | set(self.selection) | {r['model'] for r in saved},
-                             key=lambda m: (GPU_PREFERENCE.get(m.lower(), 99), m))
-        if not self.models:
-            self.models = ['a100']
-        if 'any' not in self.models:
-            self.models.append('any')
-        self.inventory = inventory or {}
-        self.backend = backend or Backend(profile)
-        self.nodes, self.queue = nodes or [], queue
-        self.freshness = freshness
-        self.minimum_vram = self.saved_guidance(self.preset_index)
-        self.counts = {}
-        self.drafts = {}
-        self.reset_counts(saved)
-
-    def saved_requests(self, index):
-        preset = self.profile.presets[index]
-        return self.settings['requests'].get(core.launch_key(self.profile, preset), [])
-
-    def saved_guidance(self, index):
-        return self.settings['guidance'].get(core.launch_key(self.profile, self.profile.presets[index]), {}).get('minimum_vram', '')
-
-    def defaults(self, index):
-        saved = self.saved_requests(index)
-        return saved[0] if saved else dict(partition='gpu', cpus=4, memory='32G',
-                                         time=self.profile.presets[index].get('time', '00:30:00'))
-
-    def reset_counts(self, saved):
-        previous = {r['model']: r['gpus'] for r in saved}
-        models = self.selection or list(previous) or [self.models[0]]
-        self.counts.clear()
-        self.counts.update({model: previous.get(model, 1) for model in models})
+        self.choices = {key: set(value) for key, value in choices.items()}
+        self.table = table
 
     def compose(self):
-        defaults = self.defaults(self.preset_index)
-        with VerticalScroll(id='dialog', classes='launch-dialog'):
-            yield Label(f'Run — {self.profile.name}')
-            yield NavigationSelect([(p['name'], i) for i, p in enumerate(self.profile.presets)],
-                                   value=self.preset_index, allow_blank=False, id='preset')
-            with Horizontal(id='run-name-row'):
-                yield Label('Run name:', id='run-name-label')
-                yield Input(value=self.run_name, id='run-name')
-            yield Static('Each selected model runs the script as a separate job.', markup=False)
-            yield GPUChoices(self.models, self.counts, self.inventory, id='submit-gpus')
-            yield Static('j/k move · Space select · h/l or −/+ count · c Compare · a Advanced · b review', classes='muted')
-            yield Static('', id='resource-summary', markup=False)
-            with Collapsible(title='Advanced settings (a)', collapsed=True, id='advanced'):
-                yield Static('CPUs: data loading/workers · RAM: host-memory needs · Time: longer runs\n'
-                             'Partition: only change if you have access. Defaults are saved per script.', classes='muted')
-                for ident, title in [('partition', 'Partition'), ('cpus', 'CPU count per job'),
-                                     ('memory', 'Host RAM per job'), ('time', 'Time limit per job')]:
-                    yield Label(title)
-                    yield Input(value=str(defaults[ident]), id='resource-' + ident)
-                yield Label('Minimum VRAM per GPU (nominal GB, including headroom; optional)')
-                yield Input(value=str(self.minimum_vram), placeholder='Blank: workload memory needs unknown', id='minimum-vram')
-                yield Label('Add an exact GPU model (if missing from inventory)')
-                yield Input(placeholder='Exact GRES name', id='custom-model')
-                yield Button('Add GPU model', id='add-model')
-            yield Static('', id='form-error', markup=False)
-            with Horizontal(id='launch-buttons'):
-                yield Button('Review request', variant='primary', id='review')
-                yield Button('Compare GPUs', id='compare')
-                yield Button('Back', id='back')
+        with VerticalScroll(id='dialog', classes='columns-dialog'):
+            yield Static('Table columns', classes='dialog-title')
+            yield NavigationSelect([(name, key) for key, name in TABLE_NAMES.items()],
+                                   value=self.table, allow_blank=False, id='column-table')
+            yield Static('Space toggles optional columns. Identity columns stay visible.', classes='muted')
+            yield SelectionList(id='column-list')
+            with Vertical(classes='column-buttons'):
+                yield Button('Compact', id='column-compact')
+                yield Button('All columns', id='column-all')
+                yield Button('Save', id='column-save', variant='primary')
+                yield Button('Back', id='column-back')
 
     def on_mount(self):
-        self.update_summary()
-        self.query_one('#submit-gpus').focus()
+        self.fill_options()
+        self.query_one('#column-list', SelectionList).focus()
 
-    def update_summary(self):
-        values = {key: self.query_one('#resource-' + key, Input).value
-                  for key in ('partition', 'cpus', 'memory', 'time')}
-        self.query_one('#resource-summary', Static).update(
-            f"Per job: {values['cpus']} CPUs · {values['memory']} RAM · {values['time']} · {values['partition']}")
+    def fill_options(self):
+        options = self.query_one('#column-list', SelectionList)
+        options.clear_options()
+        options.add_options([(label, key, key in self.choices[self.table])
+                             for key, label, _ in TABLE_COLUMNS[self.table]
+                             if key not in REQUIRED_COLUMNS[self.table]])
 
-    def on_input_changed(self, event):
-        if event.input.id == 'minimum-vram':
-            self.minimum_vram = event.value
-        if event.input.id.startswith('resource-') and self.is_mounted:
-            self.update_summary()
+    def capture(self):
+        self.choices[self.table] = set(self.query_one('#column-list', SelectionList).selected) | REQUIRED_COLUMNS[self.table]
 
     def on_select_changed(self, event):
-        if event.select.id != 'preset' or not isinstance(event.value, int) or not self.is_mounted:
-            return
-        if event.value == self.preset_index:
-            return
-        self.drafts[self.preset_index] = (self.counts.copy(), {
-            key: self.query_one('#resource-' + key, Input).value
-            for key in ('partition', 'cpus', 'memory', 'time')}, self.minimum_vram)
-        self.preset_index = event.value
-        field = self.query_one('#run-name', Input)
-        updated = core.default_run_name(self.profile, self.profile.presets[event.value])
-        if field.value == self.auto_run_name:
-            field.value = updated
-        self.auto_run_name = updated
-        if event.value in self.drafts:
-            counts, defaults, self.minimum_vram = self.drafts[event.value]
-            self.counts.clear()
-            self.counts.update(counts)
-        else:
-            self.minimum_vram = self.saved_guidance(event.value)
-            defaults = self.defaults(event.value)
-            saved = self.saved_requests(event.value)
-            table = self.query_one('#submit-gpus', GPUChoices)
-            for request in saved:
-                if request['model'] not in self.models:
-                    self.models.append(request['model'])
-                    table.add_row('', request['model'], '', '?', '8', key=request['model'])
-            self.reset_counts(saved)
-        self.query_one('#submit-gpus', GPUChoices).refresh_counts()
-        for key in ('partition', 'cpus', 'memory', 'time'):
-            self.query_one('#resource-' + key, Input).value = str(defaults[key])
-        self.query_one('#minimum-vram', Input).value = str(self.minimum_vram)
-        self.update_summary()
-
-    def action_advanced(self):
-        advanced = self.query_one('#advanced', Collapsible)
-        advanced.collapsed = not advanced.collapsed
-        if advanced.collapsed:
-            self.query_one('#submit-gpus').focus()
-        else:
-            self.query_one('#resource-partition').focus()
-
-    def add_model(self):
-        field = self.query_one('#custom-model', Input)
-        model = field.value.strip()
-        if not re.fullmatch(r'[A-Za-z0-9_.-]+', model) or model.startswith('-'):
-            raise Error('Enter an exact Slurm GPU model name.')
-        table = self.query_one('#submit-gpus', GPUChoices)
-        if model not in self.models:
-            self.models.append(model)
-            table.add_row('', model, '', '?', '8', key=model)
-        self.counts[model] = self.counts.get(model) or 1
-        table.refresh_counts()
-        table.move_cursor(row=self.models.index(model))
-        table.focus()
-        field.value = ''
-
-    def action_review(self):
-        try:
-            self.run_name = core.validate_run_name(self.query_one('#run-name', Input).value.strip())
-            core.minimum_vram(self.minimum_vram)
-            common = {key: self.query_one('#resource-' + key, Input).value.strip()
-                      for key in ('partition', 'cpus', 'memory', 'time')}
-            common['cpus'] = int(common['cpus'])
-            requests = [dict(common, model=model, gpus=count) for model, count in self.counts.items() if count]
-            if not requests:
-                raise Error('Select at least one GPU model with Space or +.')
-            for resources in requests:
-                validate_resources(resources)
-                limit = self.query_one('#submit-gpus', GPUChoices).limit(resources['model'])
-                if resources['gpus'] > limit:
-                    raise Error(f'{resources["model"]}: at most {limit} GPUs per job in this inventory.')
-            self.dismiss((self.profile.presets[self.preset_index], requests))
-        except (ValueError, Error) as exc:
-            self.query_one('#form-error', Static).update(str(exc))
-
-    def action_compare(self):
-        try:
-            common = {key: self.query_one('#resource-' + key, Input).value.strip()
-                      for key in ('partition', 'cpus', 'memory', 'time')}
-            common['cpus'] = int(common['cpus'])
-            focused = self.query_one('#submit-gpus', GPUChoices).current_model()
-            count = self.counts.get(focused) or 1
-            validate_resources(dict(common, model='any', gpus=count))
-            core.minimum_vram(self.minimum_vram)
-            self.app.push_screen(CompareGPUs(self.backend, self.profile.presets[self.preset_index],
-                                            common, count, self.minimum_vram, self.nodes,
-                                            self.queue, self.freshness), self.comparison_done)
-        except (ValueError, Error) as exc:
-            self.query_one('#form-error', Static).update(str(exc))
-
-    def comparison_done(self, result):
-        self.minimum_vram = result['minimum_vram']
-        self.query_one('#minimum-vram', Input).value = self.minimum_vram
-        if result.get('model'):
-            self.counts.clear()
-            self.counts[result['model']] = result['gpus']
-            table = self.query_one('#submit-gpus', GPUChoices)
-            table.refresh_counts()
-            table.move_cursor(row=self.models.index(result['model']))
-        self.query_one('#submit-gpus').focus()
+        if event.select.id == 'column-table' and isinstance(event.value, str) and event.value != self.table:
+            self.capture()
+            self.table = event.value
+            self.fill_options()
 
     def on_button_pressed(self, event):
         event.stop()
-        if event.button.id == 'back':
+        if event.button.id == 'column-back':
             self.dismiss(None)
-        elif event.button.id == 'review':
-            self.action_review()
-        elif event.button.id == 'compare':
-            self.action_compare()
-        elif event.button.id == 'add-model':
-            try:
-                self.add_model()
-            except Error as exc:
-                self.query_one('#form-error', Static).update(str(exc))
+        elif event.button.id == 'column-save':
+            self.capture()
+            self.dismiss(self.choices)
+        elif event.button.id in ('column-compact', 'column-all'):
+            self.choices[self.table] = (set(COMPACT_COLUMNS[self.table]) if event.button.id == 'column-compact'
+                                       else {key for key, _, _ in TABLE_COLUMNS[self.table]})
+            self.fill_options()
 
     def key_escape(self):
-        advanced = self.query_one('#advanced', Collapsible)
-        if isinstance(self.focused, Input):
-            self.query_one('#submit-gpus').focus()
-        elif not advanced.collapsed:
-            advanced.collapsed = True
-            self.query_one('#submit-gpus').focus()
-        else:
-            self.dismiss(None)
-
-
-class CompareGPUs(ModalScreen[dict]):
-    BINDINGS = [Binding('c', 'compare', 'Compare', show=False),
-                Binding('u', 'use', 'Use this model', show=False)]
-
-    def __init__(self, backend, preset, common, count, minimum, nodes, queue, freshness=''):
-        super().__init__()
-        self.backend, self.preset, self.common = backend, dict(preset), dict(common)
-        self.count, self.minimum = str(count), str(minimum)
-        self.nodes, self.queue, self.freshness = list(nodes), queue, freshness
-        self.models = sorted({m for n in nodes if core.in_partition(n, common['partition']) for m in n['capacity']},
-                             key=lambda m: (GPU_PREFERENCE.get(m.lower(), 99), m))
-        self.script = backend.read_script(preset)
-        self.estimates = {}
-        self.running = False
-        self.revision = 0
-        self.state = 'Not queried · press Compare for scheduler estimates'
-
-    def compose(self):
-        with VerticalScroll(id='dialog', classes='comparison-dialog'):
-            yield Static('Compare GPUs', classes='dialog-title')
-            yield Static(f"{shlex.join([self.preset['script'], *map(str, self.preset.get('args', []))])}\n"
-                         f"{self.common['partition']} · {self.common['cpus']} CPUs/task · "
-                         f"{self.common['memory']} host RAM/node · {self.common['time']} limit\n{self.freshness}", markup=False)
-            yield Label('GPUs per job (same request for every model)')
-            yield Input(value=self.count, id='compare-count')
-            yield Label('Minimum VRAM per GPU (nominal GB; include headroom, or leave blank)')
-            yield Input(value=self.minimum, id='compare-vram')
-            yield Static('', id='compare-status', markup=False)
-            yield NavigationTable(id='comparison', cursor_type='row')
-            yield Static('', id='compare-detail', markup=False)
-            yield Static('Observed resource fit uses healthy individual nodes; scheduling is advisory.\n'
-                         'Training speed unmeasured; predicted start does not predict completion.\n'
-                         'c Compare · u Use this model · Esc Back · h/l scroll columns', classes='muted')
-            with Horizontal():
-                yield Button('Compare', id='run-compare', variant='primary')
-                yield Button('Use this model', id='use-model')
-                yield Button('Back', id='compare-back')
-
-    def on_mount(self):
-        self.render_comparison()
-        self.query_one('#comparison').focus()
-        self.set_interval(1, self.check_script)
-
-    def check_script(self):
-        try:
-            current = self.backend.read_script(self.preset)
-        except Error as exc:
-            current = None
-            self.state = str(exc)
-        if current != self.script:
-            self.script = current
-            self.invalidate('Script changed · estimates invalidated; press Compare again')
-
-    def invalidate(self, message):
-        self.revision += 1
-        self.estimates.clear()
-        self.state = message
-        self.render_comparison()
-
-    def on_input_changed(self, event):
-        if event.input.id in ('compare-count', 'compare-vram') and self.is_mounted:
-            self.count = self.query_one('#compare-count', Input).value
-            self.minimum = self.query_one('#compare-vram', Input).value
-            self.invalidate('Request changed · estimates invalidated; press Compare again')
-
-    def request(self, model):
-        resources = dict(self.common, model=model, gpus=int(self.count))
-        validate_resources(resources)
-        core.minimum_vram(self.minimum)
-        return resources
-
-    def current_model(self):
-        table = self.query_one('#comparison', DataTable)
-        if table.row_count:
-            return str(table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value)
-        return None
-
-    def render_comparison(self):
-        if not self.is_mounted or not self.query('#comparison'):
-            return
-        table = self.query_one('#comparison', DataTable)
-        previous, horizontal = self.current_model(), table.scroll_x
-        table.clear(columns=True)
-        for key, label, width in [('model', 'Model', 11), ('vram', 'VRAM/GPU', 12),
-                                  ('memory', 'Memory assessment', 28), ('fit', 'Observed resource fit', 42),
-                                  ('pending', 'Visible pending tasks', 36), ('start', 'Predicted start (local)', 28),
-                                  ('at', 'Queried (local)', 22)]:
-            table.add_column(label, key=key, width=width)
-        demand = core.pending_demand(self.queue, self.common['partition']) if self.queue is not None else None
-        eligible = []
-        try:
-            self.request('any')
-            for model, estimate in self.estimates.items():
-                if estimate['start'] and core.gpu_metadata(model, self.minimum)['assessment'] == 'likely fits by specification':
-                    eligible.append(estimate['start'])
-            earliest = min(eligible) if eligible else None
-            error = ''
-        except (ValueError, Error) as exc:
-            earliest, error = None, str(exc)
-        for index, model in enumerate(self.models):
-            metadata = core.gpu_metadata(model, self.minimum if not error else None)
-            fit = core.observed_fit(self.nodes, self.request(model), self.script) if not error and self.script else 'unknown'
-            estimate = self.estimates.get(model)
-            start = estimate['start'] if estimate else None
-            best = earliest is not None and start == earliest and metadata['assessment'] == 'likely fits by specification'
-            label = core.display_time(start) if estimate else 'not queried'
-            if estimate and estimate['error']:
-                label = 'scheduler error'
-            table.add_row(Text(model + (' ★' if best else ''), style=theme_color("green") if best else ''),
-                          metadata['vram'], metadata['assessment'], fit,
-                          core.demand_text(demand.get(model)) if demand is not None else 'unavailable',
-                          label, core.display_time(estimate['at']) if estimate else '—', key=model)
-            if model == previous:
-                table.move_cursor(row=index, scroll=False)
-        table.scroll_to(x=horizontal, animate=False)
-        table.styles.height = min(11, max(4, len(self.models) + 3))
-        self.query_one('#compare-status', Static).update(error or (self.state +
-            ('\n★ Earliest predicted start among choices likely to meet minimum VRAM' if earliest else
-             '\nNo earliest fitting choice: enter minimum VRAM and obtain available estimates')))
-        self.query_one('#run-compare', Button).disabled = self.running or not self.models or self.script is None
-        self.query_one('#use-model', Button).disabled = self.running or bool(error) or not self.models
-        self.show_detail()
-
-    def show_detail(self):
-        model = self.current_model()
-        if model is None:
-            self.query_one('#compare-detail', Static).update('No inventoried models in this partition; refresh inventory or choose another partition.')
-            return
-        metadata = core.gpu_metadata(model)
-        cells = self.query_one('#comparison', DataTable).get_row(model)
-        estimate = self.estimates.get(model)
-        self.query_one('#compare-detail', Static).update(
-            f"{model}: {cells[1]} · {cells[2]}\nObserved resource fit: {cells[3]}\n"
-            f"Visible pending demand: {cells[4]}\nPredicted start: {cells[5]} · queried {cells[6]}\n"
-            + ('Scheduler: ' + estimate['detail'] + '\n' if estimate else '')
-            + ('Specification: ' + metadata['source'] if metadata['source'] else 'Hardware identity/VRAM unknown')
-            + '\nInstalled NVLink connectivity is unknown.')
-
-    def on_data_table_row_highlighted(self, event):
-        if event.data_table.id == 'comparison' and self.is_mounted:
-            self.show_detail()
-
-    @work(group='gpu-estimates', exclusive=False)
-    async def action_compare(self):
-        if self.running or not self.models:
-            return
-        self.check_script()
-        try:
-            self.request('any')
-            if self.script is None:
-                raise Error('Local batch script is unavailable')
-        except (ValueError, Error) as exc:
-            self.state = str(exc)
-            self.render_comparison()
-            return
-        self.running = True
-        revision, script = self.revision, self.script
-        requests = {model: self.request(model) for model in self.models}
-        self.estimates.clear()
-        try:
-            for index, model in enumerate(self.models, 1):
-                self.state = f'Comparing {index}/{len(self.models)}: {model} · test-only; no job created'
-                self.render_comparison()
-                try:
-                    estimate = await asyncio.to_thread(self.backend.estimate, self.preset, requests[model], script)
-                except (Error, OSError, ValueError, subprocess.SubprocessError) as exc:
-                    estimate = dict(start=None, at=dt.datetime.now().astimezone(), detail=str(exc), error=True)
-                if not self.is_mounted:
-                    return
-                self.check_script()
-                if self.revision != revision:
-                    return
-                self.estimates[model] = estimate
-            self.state = 'Comparison complete · estimates may change; no job created'
-        finally:
-            self.running = False
-            if self.is_mounted:
-                self.render_comparison()
-
-    def action_use(self):
-        model = self.current_model()
-        if self.running or model is None:
-            return
-        try:
-            resources = self.request(model)
-        except (ValueError, Error) as exc:
-            self.state = str(exc)
-            self.render_comparison()
-            return
-        self.dismiss(dict(model=model, gpus=resources['gpus'], minimum_vram=self.minimum))
-
-    def on_button_pressed(self, event):
-        event.stop()
-        if event.button.id == 'run-compare':
-            self.action_compare()
-        elif event.button.id == 'use-model':
-            self.action_use()
-        elif event.button.id == 'compare-back':
-            self.key_escape()
-
-    def key_escape(self):
-        if isinstance(self.focused, Input):
-            self.query_one('#comparison').focus()
-        else:
-            self.dismiss(dict(minimum_vram=self.minimum))
+        self.dismiss(None)
 
 
 class HendrixApp(App):
     TITLE = 'Hendrix'
-    SUB_TITLE = 'Local projects · Slurm GPUs · jobs'
+    SUB_TITLE = 'GPU availability · jobs'
     CSS = '''
     Screen { background: $background; overflow: hidden; }
     Header { background: $panel; height: 1; }
@@ -810,28 +420,17 @@ class HendrixApp(App):
     #dialog Static, #dialog Label, #help-dialog Static { height: auto; margin-bottom: 1; }
     #dialog Input, #dialog Select { margin-bottom: 1; }
     #dialog Horizontal { height: 3; }
-    #dialog #run-name-row { height: 1; }
-    #run-name-label { width: 11; }
-    #run-name { height: 1; border: none; padding: 0; width: 1fr; }
-    #run-name:focus { background: $surface; }
-    #submit-gpus { height: 10; min-height: 5; margin-bottom: 1; }
-    #dialog.launch-dialog { padding: 0 1; }
-    #dialog.launch-dialog #launch-buttons { height: 1; }
-    #dialog.launch-dialog #launch-buttons Button { height: 1; border: none; padding: 0 1; }
-    #dialog.launch-dialog Static, #dialog.launch-dialog Label,
-    #dialog.launch-dialog Input, #dialog.launch-dialog Select,
-    #dialog.launch-dialog #submit-gpus { margin-bottom: 0; }
-    #advanced { height: auto; padding: 0; margin-bottom: 1; }
-    #dialog.comparison-dialog { width: 120; padding: 0 1; }
-    #dialog.comparison-dialog Static, #dialog.comparison-dialog Input,
-    #dialog.comparison-dialog Label { margin-bottom: 0; }
-    #comparison { height: 10; min-height: 4; border: round $border; }
-    #form-error { color: $error; }
+    #dialog.columns-dialog { width: 76; padding: 0 1; }
+    #dialog.columns-dialog Static, #dialog.columns-dialog Select { margin-bottom: 0; }
+    #column-list { height: auto; max-height: 10; margin: 0; }
+    #dialog .column-buttons { height: 2; layout: grid; grid-size: 2; grid-columns: 1fr 1fr; grid-rows: 1; }
+    .column-buttons Button { width: 100%; height: 1; border: none; padding: 0 1; }
     .dialog-title { color: $primary; text-style: bold; }
     .muted { color: $foreground-muted; }
     '''
     BINDINGS = [('q', 'quit', 'Quit'), ('c', 'connect', 'Connect'), ('r', 'refresh', 'Refresh'),
-                ('s', 'sync', 'Sync'), ('p', 'preview', 'Preview'), ('b', 'submit', 'Submit'),
+                ('C', 'columns', 'Columns'),
+                Binding('s', 'sync', 'Sync', show=False), Binding('p', 'preview', 'Preview', show=False),
                 ('L', 'logs', 'Logs'), ('e', 'edit', 'Profiles'), ('t', 'terminal', 'SSH'),
                 ('?', 'help', 'Help'), Binding('/', 'search', 'Search', show=False),
                 Binding('v', 'mark', 'Mark', show=False), Binding('V', 'clear_marks', 'Clear marks', show=False),
@@ -843,9 +442,9 @@ class HendrixApp(App):
                 Binding('alt+l', 'next_tab', 'Next tab', show=False),
                 Binding('1', 'section(1)', 'Models', show=False),
                 Binding('2', 'section(2)', 'Nodes', show=False),
-                Binding('3', 'section(3)', 'Projects', show=False),
-                Binding('4', 'section(4)', 'Jobs', show=False),
-                Binding('5', 'section(5)', 'Logs', show=False),
+                Binding('3', 'section(3)', 'Jobs', show=False),
+                Binding('4', 'section(4)', 'Logs', show=False),
+                Binding('5', 'section(5)', 'Projects', show=False),
                 Binding('6', 'section(6)', 'Cluster queue', show=False)]
 
     def __init__(self, project=None):
@@ -853,6 +452,9 @@ class HendrixApp(App):
         self.profiles = load_profiles()
         self.profile = next((p for p in self.profiles if p.name == project), self.profiles[0])
         self.backend = Backend(self.profile)
+        self.startup_connected = False
+        self.startup_error = None
+        self.column_choices = load_columns()
         self.connected = False
         self.busy = False
         self.refreshing = False
@@ -867,7 +469,6 @@ class HendrixApp(App):
         self.old_jobs = {}
         self.last_gpu = self.last_history = self.last_jobs = self.last_queue = 0
         self.last_gpu_at = self.last_queue_at = None
-        self.selected_model = None
         self.marked_rows = set()
         self.sort_key = 'preference'
         self.sort_reverse = False
@@ -889,6 +490,7 @@ class HendrixApp(App):
                          allow_blank=False, id='project')
             yield Button('Connect', id='connect', variant='primary')
             yield Button('SSH', id='terminal')
+            yield Button('Columns', id='columns')
             yield Button('? Help', id='help')
         with TabbedContent():
             with TabPane('1/2 GPUs', id='gpu-tab'):
@@ -904,21 +506,7 @@ class HendrixApp(App):
                 yield Static('', id='gpu-advice', markup=False)
                 yield NavigationTable(id='models', cursor_type='row')
                 yield NavigationTable(id='nodes', cursor_type='row')
-            with TabPane('3 Projects', id='project-tab'):
-                yield Static('', id='project-details', markup=False)
-                with Horizontal(classes='actions'):
-                    yield Button('Preview', id='preview')
-                    yield Button('Sync', id='sync', variant='primary')
-                    yield Button('Submit', id='submit', variant='success')
-                with Horizontal(classes='actions'):
-                    yield Button('Add project', id='add')
-                    yield Button('Edit profiles', id='edit')
-                    yield Button('Reconcile', id='reconcile')
-                with Horizontal(classes='actions'):
-                    yield Button('Save login password', id='password')
-                    yield Button('Setup SSH key', id='setup-key')
-                yield NavigationLog(id='sync-output', wrap=True, markup=False, max_lines=1000)
-            with TabPane('4/5 Jobs / Logs', id='jobs-tab'):
+            with TabPane('3/4 Jobs / Logs', id='jobs-tab'):
                 with Horizontal(id='jobs-controls'):
                     yield NavigationSelect([('Active + recent finished', 'recent'), ('Active only', 'active'),
                                             ('Recent finished', 'finished'), ('Completed only', 'completed'),
@@ -936,6 +524,19 @@ class HendrixApp(App):
                     yield Button('Cancel job', id='cancel', variant='error')
                 yield Static('Select a job and open its logs. Tail is limited to the last 150 lines.', id='log-status', markup=False)
                 yield NavigationLog(id='job-log', wrap=True, markup=False, max_lines=150)
+            with TabPane('5 Projects', id='project-tab'):
+                yield Static('', id='project-details', markup=False)
+                with Horizontal(classes='actions'):
+                    yield Button('Preview', id='preview')
+                    yield Button('Sync', id='sync', variant='primary')
+                with Horizontal(classes='actions'):
+                    yield Button('Add project', id='add')
+                    yield Button('Edit profiles', id='edit')
+                    yield Button('Reconcile', id='reconcile')
+                with Horizontal(classes='actions'):
+                    yield Button('Save login password', id='password')
+                    yield Button('Setup SSH key', id='setup-key')
+                yield NavigationLog(id='sync-output', wrap=True, markup=False, max_lines=1000)
             with TabPane('6 · Cluster queue', id='queue-tab'):
                 with Horizontal(id='queue-controls'):
                     yield NavigationSelect([('gpu', 'gpu'), ('All visible partitions', '*')],
@@ -950,13 +551,22 @@ class HendrixApp(App):
     def on_mount(self):
         install_theme(self)
         for ident, title in [('models', '1 · GPU models'), ('nodes', '2 · GPU nodes'),
-                             ('jobs', '4 · Jobs'), ('job-log', '5 · Logs')]:
+                             ('jobs', '3 · Jobs'), ('job-log', '4 · Logs')]:
             self.query_one('#' + ident).border_title = title
         self.render_nodes()
         self.render_cluster_queue()
         self.render_jobs()
         self.show_profile()
         self.set_interval(5, self.tick)
+        self.query_one('#models', DataTable).focus()
+        if self.startup_connected:
+            self.status('Connected · loading GPUs…')
+            self.refresh_data(force=True)
+        elif self.startup_error:
+            self.status('Connection failed · c retry · ? details')
+            self.connection_detail = self.startup_error
+            self.output(self.startup_error)
+            self.notify(self.startup_error, severity='error', timeout=10)
 
     def status(self, text):
         self.connection_detail = text
@@ -1003,7 +613,6 @@ class HendrixApp(App):
         self.nodes, self.jobs, self.old_jobs = [], [], {}
         self.cluster_jobs, self.queue_warning, self.data_errors = None, '', {}
         self.marked_rows.clear()
-        self.selected_model = None
         self.last_gpu = self.last_history = self.last_jobs = self.last_queue = 0
         self.last_gpu_at = self.last_queue_at = None
         self.log_job, self.log_follow = None, False
@@ -1037,10 +646,7 @@ class HendrixApp(App):
                 self.action_logs()
 
     def on_data_table_row_selected(self, event):
-        if event.data_table.id == 'models':
-            self.selected_model = str(event.row_key.value)
-            self.notify(f'Next submission GPU: {self.selected_model}')
-        elif event.data_table.id == 'jobs':
+        if event.data_table.id == 'jobs':
             self.action_logs()
 
     def table_row_key(self, table):
@@ -1075,6 +681,37 @@ class HendrixApp(App):
         style = theme_color("green") if free is not None and free > 0 else theme_color("yellow") if free is None else theme_color("muted")
         return Text(free_total(free, total, gib=gib), style=style)
 
+    def add_table_columns(self, table, *, node_width=None):
+        keys = []
+        for key, label, width in TABLE_COLUMNS[table.id]:
+            if key in self.column_choices[table.id]:
+                if table.id == 'nodes' and key == 'node':
+                    width = node_width
+                title = self.header_label(key, label) if table.id in ('models', 'nodes') else label
+                table.add_column(title, key=key, width=width)
+                keys.append(key)
+        return keys
+
+    @work(group='columns', exclusive=True)
+    async def action_columns(self):
+        if isinstance(self.screen, ModalScreen):
+            return
+        active = self.query_one(TabbedContent).active
+        table = self.focused.id if isinstance(self.focused, DataTable) else {
+            'gpu-tab': 'models', 'jobs-tab': 'jobs', 'queue-tab': 'cluster-queue'}.get(active, 'models')
+        choices = await self.push_screen_wait(ColumnChooser(self.column_choices, table))
+        if choices is None:
+            return
+        try:
+            atomic_json(core.CONFIG / 'ui.json', {key: sorted(value) for key, value in choices.items()})
+        except OSError as exc:
+            self.notify(f'Could not save columns: {exc}', severity='error')
+            return
+        self.column_choices = choices
+        self.render_nodes()
+        self.render_jobs()
+        self.render_cluster_queue()
+
     def render_nodes(self):
         table = self.query_one('#nodes', DataTable)
         previous = self.table_row_key(table)
@@ -1098,11 +735,7 @@ class HendrixApp(App):
         # selection does not move the following columns.
         node_width = max(len(self.header_label('node', 'Node')),
                          max((len(name) for name in display_names.values()), default=0)) + 2
-        widths = [('node', 'Node', node_width),
-                  ('model', 'Model', 9), ('gpu', 'GPU', 6),
-                  ('cpu', 'CPU', 8), ('ram', 'RAM GiB', 14), ('state', 'State', 9)]
-        for key, label, width in widths:
-            table.add_column(self.header_label(key, label), key=key, width=width)
+        node_columns = self.add_table_columns(table, node_width=node_width)
         if self.show_reasons and reasons:
             table.add_column('Unavailable reason', key='reason', width=36)
         self.node_rows = {}
@@ -1113,12 +746,13 @@ class HendrixApp(App):
             name = display_names[n['name']]
             free = max(0, n['capacity'][model] - n['used'][model]) if n['used'][model] is not None else None
             state_style = theme_color("red") if not n['eligible'] else theme_color("green") if n['state'] == 'IDLE' else theme_color("yellow")
-            cells = [Text(name + (' ●' if marked else ''),
-                          style=("bold " + theme_color("accent")) if marked else theme_color("text")), model,
-                     self.resource_text(free, n['capacity'][model]),
-                     self.resource_text(n.get('cpu_free'), n.get('cpu_total')),
-                     self.resource_text(n.get('ram_free'), n.get('ram_total'), gib=True),
-                     Text(n['state'], style=state_style, overflow='ellipsis', no_wrap=True)]
+            values = {'node': Text(name + (' ●' if marked else ''),
+                                   style=('bold ' + theme_color('accent')) if marked else theme_color('text')),
+                      'model': model, 'gpu': availability_bar(free, n['capacity'][model]),
+                      'cpu': self.resource_text(n.get('cpu_free'), n.get('cpu_total')),
+                      'ram': self.resource_text(n.get('ram_free'), n.get('ram_total'), gib=True),
+                      'state': Text(n['state'], style=state_style, overflow='ellipsis', no_wrap=True)}
+            cells = [values[key] for key in node_columns]
             if self.show_reasons and reasons:
                 cells.append(n.get('reason', ''))
             table.add_row(*cells, key=row_key)
@@ -1126,12 +760,9 @@ class HendrixApp(App):
                 table.move_cursor(row=index, scroll=False)
         table.scroll_to(x=horizontal, animate=False)
         table.border_title = '2 · GPU nodes · free(total)'
-        table.border_subtitle = 'v mark · y copy · b run'
+        table.border_subtitle = 'v mark · y copy · C columns'
         models.clear(columns=True)
-        for key, label, width in [('model', 'Model', 12), ('gpu', 'GPU', 10), ('cpu', 'CPU', 13), ('ram', 'Host RAM GiB', 16),
-                                  ('vram', 'VRAM/GPU', 12), ('healthy', 'Healthy free', 12),
-                                  ('pending', 'Pending tasks', 16)]:
-            models.add_column(self.header_label(key, label), key=key, width=width)
+        model_columns = self.add_table_columns(models)
         totals = summarize(nodes)
         demand = core.pending_demand(self.cluster_jobs, self.queue_partition) if self.cluster_jobs is not None else None
         if self.sort_key == 'preference':
@@ -1156,26 +787,26 @@ class HendrixApp(App):
             ram_free = None if row['ram_free_unknown'] else row['ram_free']
             ram_total = None if row['ram_total_unknown'] else row['ram_total']
             marked = any(model == row['model'] for _, model in self.marked_rows)
-            models.add_row(Text(row['model'] + (' ●' if marked else ''), style=("bold " + theme_color("accent"))), self.resource_text(gpu, row['total']),
-                           self.resource_text(cpu_free, cpu_total), self.resource_text(ram_free, ram_total, gib=True),
-                           core.gpu_metadata(row['model'])['vram'], '?' if row['usable_unknown'] else str(row['usable']),
-                           ('?' if demand is None or demand.get(row['model'], {}).get('unknown') else
-                            str(demand.get(row['model'], {}).get('tasks', 0))),
-                           key=row['model'])
+            values = {'model': Text(row['model'] + (' ●' if marked else ''), style='bold ' + theme_color('accent')),
+                      'gpu': availability_bar(gpu, row['total']),
+                      'cpu': self.resource_text(cpu_free, cpu_total),
+                      'ram': self.resource_text(ram_free, ram_total, gib=True),
+                      'vram': core.gpu_metadata(row['model'])['vram'],
+                      'healthy': '?' if row['usable_unknown'] else str(row['usable']),
+                      'pending': '?' if demand is None or demand.get(row['model'], {}).get('unknown')
+                                 else str(demand.get(row['model'], {}).get('tasks', 0))}
+            models.add_row(*(values[key] for key in model_columns), key=row['model'])
             if row['model'] == previous_model:
                 models.move_cursor(row=index, scroll=False)
         models.styles.height = min(12, max(4, len(totals) + 3))
         models.border_title = '1 · GPU models · free(total)'
-        models.border_subtitle = 'v mark · b run · Click heading to sort'
+        models.border_subtitle = 'v mark · y copy · Click heading to sort'
         total = sum(len(n['capacity']) for n in self.nodes)
         self.query_one('#gpu-view-status', Static).update(
             f'{len(rows)}/{total} rows · {len(self.marked_rows)} marked · '
             + ('model preference' if self.sort_key == 'preference' else self.sort_key + (' ↓' if self.sort_reverse else ' ↑')))
         self.query_one('#gpu-advice', Static).update(
-            f'Visible pending demand ({self.queue_partition if self.queue_partition != "*" else "all visible"}): '
-            + ('unavailable' if demand is None else 'Any GPU: ' + core.demand_text(demand.get('any')))
-            + f' · {self.queue_freshness()}\nInventory: {core.display_time(self.last_gpu_at)} · '
-              'Nominal VRAM; variants/aliases may be uncertain. Host RAM is separate.')
+            f'Inventory: {core.display_time(self.last_gpu_at)} · bars = free / total GPUs · Slurm allocations')
 
     def on_data_table_header_selected(self, event):
         if event.data_table.id not in ('models', 'nodes'):
@@ -1221,8 +852,8 @@ class HendrixApp(App):
         if isinstance(self.screen, ModalScreen):
             return
         pane, target = {1: ('gpu-tab', 'models'), 2: ('gpu-tab', 'nodes'),
-                        3: ('project-tab', 'sync'), 4: ('jobs-tab', 'jobs'),
-                        5: ('jobs-tab', 'job-log'), 6: ('queue-tab', 'cluster-queue')}[section]
+                        3: ('jobs-tab', 'jobs'), 4: ('jobs-tab', 'job-log'),
+                        5: ('project-tab', 'sync'), 6: ('queue-tab', 'cluster-queue')}[section]
         self.query_one(TabbedContent).active = pane
         self.query_one('#' + target).focus()
 
@@ -1329,7 +960,7 @@ class HendrixApp(App):
         if isinstance(self.screen, ModalScreen):
             return
         tabs = self.query_one(TabbedContent)
-        panes = ['gpu-tab', 'project-tab', 'jobs-tab', 'queue-tab']
+        panes = ['gpu-tab', 'jobs-tab', 'project-tab', 'queue-tab']
         tabs.active = panes[(panes.index(tabs.active) + direction) % len(panes)]
         target = {'gpu-tab': '#nodes', 'project-tab': '#sync', 'jobs-tab': '#jobs', 'queue-tab': '#cluster-queue'}[tabs.active]
         self.query_one(target).focus()
@@ -1345,10 +976,7 @@ class HendrixApp(App):
         selected = self.selected_job()
         horizontal = table.scroll_x
         table.clear(columns=True)
-        # Recreate auto-sized columns so removed rows cannot leave oversized
-        # widths behind. Textual measures just the headers and current rows.
-        table.add_columns('Job', 'Project', 'Run', 'State', 'Elapsed', 'Limit',
-                          'Node / reason', 'GPU', 'Exit')
+        columns = self.add_table_columns(table)
         records = {r.get('job_id'): r for r in self.backend.history() if r.get('host') == self.profile.host}
         visible = core.visible_jobs(self.jobs, self.jobs_view, self.jobs_limit)
         for job in visible:
@@ -1359,9 +987,9 @@ class HendrixApp(App):
                 preset = next((p for p in profile.presets if p['script'] == record.get('script')
                                and p.get('args', []) == record.get('args', [])), None) if profile else None
                 run_name = preset['name'] if preset else job['name']
-            table.add_row(job['id'], record.get('project', '—'), run_name or job['name'],
-                          job['state'], job['elapsed'], job['limit'], job['reason'],
-                          core.compact_job_gpu(job['gpu']), job.get('exit', ''), key=job['id'])
+            values = dict(job, project=record.get('project', '—'), run=run_name or job['name'],
+                          gpu=core.compact_job_gpu(job['gpu']), exit=job.get('exit', ''))
+            table.add_row(*(values[key] for key in columns), key=job['id'])
         if selected:
             for index, job in enumerate(visible):
                 if job['id'] == selected:
@@ -1388,12 +1016,7 @@ class HendrixApp(App):
         table = self.query_one('#cluster-queue', DataTable)
         previous, horizontal = self.table_row_key(table), table.scroll_x
         table.clear(columns=True)
-        for key, label, width in [('id', 'Job / array', 27), ('gpu', 'GPU request', 27),
-                                  ('tasks', 'Tasks / cap', 16), ('cpus', 'CPUs/job', 9),
-                                  ('memory', 'Host RAM min', 16), ('limit', 'Limit', 13),
-                                  ('reason', 'Reason (raw)', 27), ('submitted', 'Submitted (local)', 22),
-                                  ('start', 'Scheduler start (local)', 22), ('partition', 'Partition', 22)]:
-            table.add_column(label, key=key, width=width)
+        columns = self.add_table_columns(table)
         search = self.query_one('#queue-filter', Input).value.lower()
         visible = [j for j in self.cluster_jobs or [] if core.in_partition(j, self.queue_partition)]
         rows = [j for j in visible if not search or search in ' '.join(
@@ -1402,9 +1025,9 @@ class HendrixApp(App):
         for index, job in enumerate(rows):
             tasks = str(job['tasks']) if job['tasks'] is not None else '?'
             cap = core.cap_text(job)
-            table.add_row(job['id'], job['gpu'], f'{tasks} / {cap}', job['cpus'], job['memory'], job['limit'],
-                          job['reason'], core.display_time(job['submitted']), core.display_time(job['start']),
-                          job['partition'], key=job['id'])
+            values = dict(job, tasks=f'{tasks} / {cap}', submitted=core.display_time(job['submitted']),
+                          start=core.display_time(job['start']))
+            table.add_row(*(values[key] for key in columns), key=job['id'])
             if job['id'] == previous:
                 table.move_cursor(row=index, scroll=False)
         table.scroll_to(x=horizontal, animate=False)
@@ -1651,62 +1274,6 @@ class HendrixApp(App):
 
     def action_sync(self):
         self.sync_project()
-
-    @work(group='operation', exclusive=False)
-    async def action_submit(self):
-        if self.busy or isinstance(self.screen, ModalScreen):
-            return
-        if not self.profile.presets:
-            self.notify('Add a batch-script preset using Edit profiles first.', severity='warning')
-            return
-        self.busy = True
-        try:
-            models = sorted({model for n in self.nodes for model in n['capacity']})
-            selected = list(request_groups(self.nodes, self.marked_rows)) if self.marked_rows else []
-            if not selected and isinstance(self.focused, DataTable) and self.focused.id in ('models', 'nodes'):
-                selected = list(self.copy_groups())
-            inventory = {r['model']: (None if r['unknown'] else r['unallocated'], r['total'],
-                         max(n['capacity'].get(r['model'], 0) for n in self.nodes))
-                         for r in summarize(self.nodes)}
-            freshness = ('Inventory updated ' + core.display_time(self.last_gpu_at)
-                         + (' · stale: ' + self.data_errors['inventory'] if 'inventory' in self.data_errors else '')
-                         + '\n' + self.queue_freshness())
-            form = SubmitForm(self.profile, models, self.selected_model, selected, inventory,
-                              self.backend, self.nodes, self.cluster_jobs, freshness)
-            request = await self.push_screen_wait(form)
-            if request is None:
-                return
-            preset, requests = request
-            summary = (f'Sync project source and submit {len(requests)} job(s)?\n\n'
-                       f'{self.profile.name} → {self.profile.host}\n'
-                       f'Run name: {form.run_name}--GPU_MODEL\n'
-                       f'Batch script: {shlex.join([preset["script"], *preset.get("args", [])])}\n'
-                       + '\n\n'.join(f'Job {i}: ' + ', '.join(f'{key}: {value}' for key, value in resources.items())
-                                        for i, resources in enumerate(requests, 1)) +
-                       (f'\n\nAdvisory minimum VRAM: {form.minimum_vram} nominal GB/GPU (not a Slurm flag).'
-                        if form.minimum_vram else '') +
-                       '\n\nEach GPU model runs the script separately, with its own snapshot and logs.' +
-                       '\n\nDatasets and the existing environment remain shared. Jobs may queue. No GPU fallback.')
-            if not await self.push_screen_wait(Confirm(summary)):
-                return
-            core.remember_launch(self.profile, preset, requests, form.minimum_vram)
-            for i, resources in enumerate(requests, 1):
-                self.output(f'Preparing job {i}/{len(requests)}: {resources["model"]} × {resources["gpus"]}…')
-                try:
-                    result = await asyncio.to_thread(self.backend.submit, preset, resources, run_name=form.run_name)
-                except (Error, OSError, ValueError, subprocess.SubprocessError):
-                    self.output(f'Stopped at job {i}/{len(requests)}. Earlier submitted jobs remain active; '
-                                'remaining requests were not attempted. Reconcile if the response was lost.')
-                    raise
-                self.output(f'Submitted job {result["job_id"]}\nSnapshot: {result["snapshot"]}\nLogs: {result["output"]}')
-                self.notify('Submitted job ' + result['job_id'])
-            self.show_profile()
-        except (Error, OSError, ValueError, subprocess.SubprocessError) as exc:
-            self.output(str(exc))
-            self.notify(str(exc), severity='error', timeout=15)
-        finally:
-            self.busy = False
-        self.refresh_data(force=True)
 
     @work(group='operation', exclusive=False)
     async def action_add(self):

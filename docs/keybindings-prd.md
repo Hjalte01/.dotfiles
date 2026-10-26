@@ -144,7 +144,10 @@ means the larger-scope variant.
 - `Super+H/J/K/L` focuses; adding Shift swaps; adding Alt resizes.
 - `Super+1..0` changes workspace; adding Shift moves the window.
 - `Super+E` chooses or creates a workspace set; `Super+Shift+E` returns to the
-  previous set. Workspaces 1–9 belong to the current set; idle workspace 0 is shared.
+  previous set. `Super+Ctrl+Shift+E` sends the focused window to that set's last
+  focused workspace while staying in the current set. `Super+Alt+Shift+E` moves
+  the whole current workspace to the same previous set and focused workspace.
+  Workspaces 1–9 belong to the current set; idle workspace 0 is shared.
 - `Super+Space` opens the launcher; Shift opens its fullscreen variant; Ctrl toggles
   Waybar.
 - `Super+V` opens clipboard history; Shift makes it fullscreen; Ctrl captures the

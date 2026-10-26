@@ -93,7 +93,20 @@ def restore_view(view):
         dispatch("focuswindow", f"address:{address}")
 
 
+def recover_move(state):
+    pending = state.get("pending_move")
+    if not pending:
+        return
+    addresses = set(pending["addresses"])
+    for client in query("clients"):
+        if client["address"] in addresses and client["workspace"]["name"] == pending["target"]:
+            dispatch("movetoworkspacesilent", f'name:{pending["source"]},address:{client["address"]}')
+    del state["pending_move"]
+    save(state)
+
+
 def recover(state):
+    recover_move(state)
     pending = state.get("pending")
     if not pending:
         return
@@ -126,6 +139,7 @@ def load():
             for key in ("monitors", "focused", "window"):
                 item.pop(key, None)
         state.pop("pending", None)
+        state.pop("pending_move", None)
         state["session"] = session
         state["previous"] = None
         save(state)
@@ -170,6 +184,93 @@ def switch(state, target):
     del state["pending"]
     save(state)
     refresh_bar()
+
+
+def focus_window(address, monitor):
+    """Activate an overview result without exposing a parked workspace directly."""
+    with locked():
+        state = load()
+        if not any(m["name"] == monitor for m in query("monitors")):
+            raise RuntimeError("Destination monitor disconnected")
+        client = next((c for c in query("clients") if c["address"] == address and c.get("mapped", True)), None)
+        if client is None:
+            raise RuntimeError("That window has closed")
+        parked = PARKED.fullmatch(client["workspace"]["name"])
+        if parked:
+            if parked[1] not in state["sets"]:
+                raise RuntimeError("That workspace set no longer exists")
+            switch(state, parked[1])
+            client = next((c for c in query("clients") if c["address"] == address), None)
+            if client is None:
+                raise RuntimeError("That window has closed")
+        dispatch("focusmonitor", monitor)
+        name = client["workspace"]["name"]
+        if name == "special" or name.startswith("special:"):
+            destination = next(m for m in query("monitors") if m["name"] == monitor)
+            if destination.get("specialWorkspace", {}).get("id") != client["workspace"]["id"]:
+                dispatch("togglespecialworkspace", name.removeprefix("special:") if name != "special" else "")
+        else:
+            dispatch("focusworkspaceoncurrentmonitor", f"name:{name}")
+        dispatch("focuswindow", f"address:{address}")
+
+
+def previous_destination(state, source):
+    target = state["previous"]
+    if not target or target == state["current"]:
+        raise RuntimeError("No previous set yet; choose one with Super+E")
+    view = state["sets"][target]
+    slot = view.get("monitors", {}).get(view.get("focused"))
+    return target, slot if slot in SLOTS else source
+
+
+def move_back(state):
+    window = query("activewindow")
+    address = window.get("address")
+    if not address or address == "0x":
+        raise RuntimeError("Focus a window to move first")
+    source = window.get("workspace", {}).get("name")
+    if source not in SLOTS:
+        raise RuntimeError("Focus a window on workspace 1–9 in the current set")
+    if window.get("pinned"):
+        raise RuntimeError("Unpin the window before moving it to another set")
+    target, slot = previous_destination(state, source)
+    # Address the captured window explicitly, and create the parked workspace
+    # if its last window was closed. Keep both set history and the view intact
+    # so repeated moves can sort several windows into the same destination.
+    dispatch("movetoworkspacesilent", f"name:set:{target}:{slot},address:{address}")
+
+
+def active_workspace():
+    monitor = next((m for m in query("monitors") if m["focused"]), None)
+    if not monitor or monitor["activeWorkspace"]["name"] not in SLOTS or monitor.get("specialWorkspace", {}).get("id", 0):
+        raise RuntimeError("Focus workspace 1–9 in the current set first")
+    return monitor["activeWorkspace"]
+
+
+def move_workspace(state, target, slot, source=None):
+    if target not in state["sets"] or target == state["current"]:
+        raise RuntimeError("Choose a different destination workspace set")
+    if slot not in SLOTS:
+        raise RuntimeError("Choose a destination workspace from 1–9")
+    source = source if source is not None else active_workspace()
+    # Capture every mapped member of a group, including hidden tabs. Pinned
+    # windows are shared across sets and stay where they are.
+    windows = [c for c in query("clients") if c["workspace"]["id"] == source["id"]
+               and c.get("mapped", True) and not c.get("pinned")]
+    if not windows:
+        raise RuntimeError("This workspace has no windows to move")
+    destination = f"set:{target}:{slot}"
+    state["pending_move"] = {"source": source["name"], "target": destination,
+                             "addresses": [c["address"] for c in windows]}
+    save(state)
+    try:
+        for client in windows:
+            dispatch("movetoworkspacesilent", f'name:{destination},address:{client["address"]}')
+    except Exception:
+        recover_move(state)
+        raise
+    del state["pending_move"]
+    save(state)
 
 
 def find_set(state, name):
@@ -224,7 +325,39 @@ def menu():
         mutate("select", choices[answer])
 
 
-def mutate(action, name=None):
+def move_workspace_menu():
+    with locked():
+        state = load()
+        current, source = state["current"], active_workspace()
+        targets = sorted((key for key in state["sets"] if key != current),
+                         key=lambda key: key != state["previous"])
+        choices = {state["sets"][key]["name"]: key for key in targets}
+        clients = query("clients")
+    answer = choose(f'Move workspace {source["name"]} to set', list(choices))
+    if answer is None:
+        return
+    target = choices[answer]
+    counts = dict.fromkeys(sorted(SLOTS), 0)
+    for client in clients:
+        parked = PARKED.fullmatch(client["workspace"]["name"])
+        if parked and parked[1] == target and client.get("mapped", True) and not client.get("pinned"):
+            counts[parked[2]] += 1
+    slots = {f"Workspace {slot} · {count} {'window' if count == 1 else 'windows'}": slot
+             for slot, count in counts.items()}
+    answer = choose(f'Destination in {state["sets"][target]["name"]}', list(slots))
+    if answer is None:
+        return
+    with locked():
+        state = load()
+        # Rofi can stay open while another command switches or renames slots.
+        # Never redirect a move to a different set or a replacement workspace.
+        if state["current"] != current or not any(w["id"] == source["id"] and w["name"] == source["name"]
+                                                   for w in query("workspaces")):
+            raise RuntimeError("The source workspace changed; open the move menu again")
+        move_workspace(state, target, slots[answer], source)
+
+
+def mutate(action, name=None, slot=None):
     with locked():
         state = load()
         if action == "create":
@@ -245,6 +378,14 @@ def mutate(action, name=None):
             if not state["previous"]:
                 raise RuntimeError("No previous set yet; choose one with Super+E")
             switch(state, state["previous"])
+        elif action == "move-back":
+            move_back(state)
+        elif action == "move-workspace-back":
+            source = active_workspace()
+            target, slot = previous_destination(state, source["name"])
+            move_workspace(state, target, slot, source)
+        elif action == "move-workspace":
+            move_workspace(state, find_set(state, name), slot)
         else:
             switch(state, name if action == "select" else find_set(state, name))
 
@@ -252,27 +393,39 @@ def mutate(action, name=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
-    for action in ("menu", "back", "status", "list"):
+    for action in ("menu", "back", "move-back", "move-workspace-back", "move-workspace-menu", "status", "list"):
         commands.add_parser(action)
     for action in ("create", "switch", "rename"):
         commands.add_parser(action).add_argument("name")
+    move = commands.add_parser("move-workspace", help="Move the current workspace's windows to another set")
+    move.add_argument("name", help="Destination set name")
+    move.add_argument("slot", choices=sorted(SLOTS), help="Destination workspace number")
+    focus = commands.add_parser("focus-window", help="Switch sets and focus an overview window on a monitor")
+    focus.add_argument("address")
+    focus.add_argument("monitor")
     args = parser.parse_args()
     if args.action not in ("list", "status"):
         subprocess.run([str(Path.home() / ".local/bin/desktop-which-key"), "hold-end"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     if args.action == "menu":
         menu()
+    elif args.action == "focus-window":
+        focus_window(args.address, args.monitor)
+    elif args.action == "move-workspace-menu":
+        move_workspace_menu()
     elif args.action == "status":
         state = read_state()
         name = state["sets"][state["current"]]["name"]
         print(json.dumps({"text": html.escape(name), "tooltip": "Workspace set: " + html.escape(name)
-                          + "\nSuper+E: choose/create · Super+Shift+E: previous"}))
+                          + "\nSuper+E: choose/create · Super+Shift+E: previous"
+                          + "\nSuper+Ctrl+Shift+E: move window to previous set"
+                          + "\nSuper+Alt+Shift+E: move whole workspace to previous set"}))
     elif args.action == "list":
         state = read_state()
         for key, item in state["sets"].items():
             print(("* " if key == state["current"] else "  ") + item["name"])
     else:
-        mutate(args.action, getattr(args, "name", None))
+        mutate(args.action, getattr(args, "name", None), getattr(args, "slot", None))
 
 
 if __name__ == "__main__":
