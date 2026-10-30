@@ -159,3 +159,34 @@ Then add the printed public key in GitHub under SSH keys and test:
 ssh -T git@github.com
 git pull
 ```
+
+
+## Asset Studio
+
+Asset Studio is the private `/roblox-assets/` hub application on loopback port
+8766. Its VPS-only declarations are `nixos/roblox-asset-studio.nix` and
+`pkgs/roblox-asset-studio.nix`. The package pins a verified commit from
+`/home/hjalte/documents/roblox-gamemodes`; its Three.js toolkit is built from the
+committed npm lockfile, and its image-reference helper is bundled in that commit.
+
+`roblox-asset-studio.service` serves reviews and persistent image history.
+`roblox-asset-worker.service` advances finite jobs through the existing serial
+Codex Queue, using the existing signed-in `hjalte` account. Reviews, generated
+files and checkpoints live under `/var/lib/roblox-asset-studio` (mode 0700).
+No API key, Roblox credential, public firewall port or Studio installation is
+needed on the VPS. Roblox uploads and native Studio verification remain on the PC.
+
+The worker checks both web and queue process revisions before starting. The queue
+uses its dedicated `asset` stage kind with explicit Sol Low, workspace-write
+restricted to the stage's managed job directory, and no Git/deployment lifecycle.
+Its existing global pause, allowance gate and serial slot remain authoritative.
+Keep Asset Studio dispatch paused during first activation; verify pinned process
+revisions before releasing baseline-reference or accepted-reference jobs.
+Accepting a 2D image queues its 3D candidate; it does not approve the model for the
+shared library or publish a Roblox experience. Non-object references remain 2D.
+
+The services start at boot and restart after a failure. Preserve SQLite and
+artifact storage together; use the SQLite online backup API for a live backup,
+not a copy of the database without its WAL. Update the reviewed source pin, run
+`nxb` on mobile-dev under the existing `/var/lib/codex-queue/deployment.lock`, then
+verify both services and `https://mobile-dev.tail55f864.ts.net/roblox-assets/`.

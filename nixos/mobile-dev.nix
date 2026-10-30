@@ -14,6 +14,7 @@
   atdlLearning = pkgs.callPackage ../pkgs/atdl-learning.nix {};
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
   robloxDesignDashboard = pkgs.callPackage ../pkgs/roblox-design-dashboard.nix {};
+  robloxAssetStudio = pkgs.callPackage ../pkgs/roblox-asset-studio.nix {};
   # Read versions from the exact sources activated alongside these routes.
   hubVersions = pkgs.writeText "vps-hub-versions.json" (builtins.toJSON
     ((lib.mapAttrs (_: app: {
@@ -22,6 +23,7 @@
     }) {
       home = vpsHub;
       roblox-design = robloxDesignDashboard;
+      roblox-assets = robloxAssetStudio;
       codex-queue = codexQueue;
       game-factory = gameFactoryGallery;
       thesis-learning = thesisLearning;
@@ -34,6 +36,7 @@ in {
     "${modulesPath}/profiles/qemu-guest.nix"
     ./obsidian-webdav.nix
     ./roblox-design-dashboard.nix
+    ./roblox-asset-studio.nix
   ];
 
   nix.settings = {
@@ -155,6 +158,21 @@ in {
           extraConfig = ''
             default_type application/json;
             add_header Cache-Control "no-store" always;
+          '';
+        };
+        "= /roblox-assets" = {
+          return = "308 /roblox-assets/";
+          extraConfig = "absolute_redirect off;";
+        };
+        "/roblox-assets/" = {
+          proxyPass = "http://127.0.0.1:8766";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
+            proxy_set_header X-Forwarded-Prefix /roblox-assets;
+            proxy_set_header Accept-Encoding "";
+            client_max_body_size 2m;
           '';
         };
         "= /roblox-design" = {
