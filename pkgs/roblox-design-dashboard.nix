@@ -19,6 +19,7 @@ stdenvNoCC.mkDerivation {
     node --check website/static/app.js
     node --check website/studio_static/studio.js
     node --check website/studio_static/nav.js
+    node --test website/tests/test_studio_ui.mjs
     runHook postCheck
   '';
   installPhase = ''
