@@ -46,7 +46,7 @@
       - On this main PC, automatic task-completion commit/push is enabled only for `/home/hjalte/Documents/other/side_projects/roblox_gamemodes` and that repository's worktrees (Git remote `Hjalte01/roblox-gamemodes`). Other PC repositories keep their existing push behavior; do not automatically commit/push them unless explicitly requested. In the Roblox repository, publish only completed, verified, owned work once no other task is editing the checkout.
     '';
 in {
-  imports = [./themes.nix];
+  imports = [./themes.nix ./reference-3d.nix];
 
   home.username = "hjalte";
   home.homeDirectory = "/home/hjalte";

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Low 3D"
+  short_description: "Create editable 3D assets with Sol Low"
+  default_prompt: "Use $low-3d to create an editable 3D asset from my approved reference."

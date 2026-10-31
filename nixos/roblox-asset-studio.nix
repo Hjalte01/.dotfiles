@@ -36,6 +36,7 @@ in {
     "d ${state}/seed 0700 hjalte users -"
     "d ${state}/bundles 0750 hjalte users -"
     "d ${state}/jobs/maps 0750 hjalte users -"
+    "d /home/hjalte/.codex/generated_images 0700 hjalte users -"
   ];
   systemd.services.roblox-asset-studio = {
     description = "Private Roblox asset reference reviews";
@@ -87,6 +88,7 @@ in {
       ASSET_STUDIO_REFERENCE_HELPER = helper;
       ASSET_STUDIO_TOOLKIT = "${asset.toolkit}";
       ASSET_STUDIO_QUEUE_REVISION = queue.src.rev;
+      ASSET_STUDIO_NATIVE_CLEANUP = "true";
     };
     serviceConfig = {
       User = "hjalte";
@@ -106,7 +108,7 @@ in {
       ProtectHome = "read-only";
       ProtectSystem = "strict";
       BindReadOnlyPaths = [ "${repository}:${source}" ];
-      ReadWritePaths = [ state "/var/lib/codex-queue" ];
+      ReadWritePaths = [ state "/var/lib/codex-queue" "/home/hjalte/.codex/generated_images" ];
       ProtectKernelTunables = true;
       ProtectControlGroups = true;
       RestrictSUIDSGID = true;

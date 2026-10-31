@@ -1,0 +1,4 @@
+interface:
+  display_name: "Max 3D"
+  short_description: "Create editable 3D assets with Astra Max"
+  default_prompt: "Use $max-3d to create an editable 3D asset using shared reference views."

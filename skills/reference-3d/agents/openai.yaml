@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reference 3D"
+  short_description: "Build and compare 3D from shared references"
+  default_prompt: "Use $reference-3d to compare Sol Low and Astra Max geometry from one shared reference set."
