@@ -1,6 +1,7 @@
 {buildNpmPackage, nodejs_22, lib}: let
   source = builtins.fetchGit {
-    url = "file:///home/hjalte/documents/atdl_learning_site";
+    # Keep the exact site revision reproducible after disposable checkouts are removed.
+    url = "https://github.com/Hjalte01/atdl_learning_site.git";
     lfs = true;
     rev = "0f134233109b528a6b1341e33d0bc8b39bf171ad";
   };

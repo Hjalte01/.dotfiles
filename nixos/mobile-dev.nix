@@ -22,6 +22,7 @@
       revision = app.src.rev;
     }) {
       home = vpsHub;
+      roblox-studio = robloxDesignDashboard;
       roblox-design = robloxDesignDashboard;
       roblox-assets = robloxAssetStudio;
       codex-queue = codexQueue;
@@ -37,6 +38,7 @@ in {
     ./obsidian-webdav.nix
     ./roblox-design-dashboard.nix
     ./roblox-asset-studio.nix
+    ./roblox-map-worker.nix
   ];
 
   nix.settings = {
@@ -160,32 +162,48 @@ in {
             add_header Cache-Control "no-store" always;
           '';
         };
-        "= /roblox-assets" = {
-          return = "308 /roblox-assets/";
-          extraConfig = "absolute_redirect off;";
-        };
-        "/roblox-assets/" = {
+        "= /roblox" = { return = "308 /roblox/"; extraConfig = "absolute_redirect off;"; };
+        "= /roblox/assets" = { return = "308 /roblox/assets/"; extraConfig = "absolute_redirect off;"; };
+        "/roblox/assets/" = {
           proxyPass = "http://127.0.0.1:8766";
           extraConfig = ''
             proxy_set_header Host $host;
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
-            proxy_set_header X-Forwarded-Prefix /roblox-assets;
             proxy_set_header Accept-Encoding "";
-            client_max_body_size 2m;
+            client_max_body_size 18m;
           '';
         };
-        "= /roblox-design" = {
-          return = "308 /roblox-design/";
-          extraConfig = "absolute_redirect off;";
-        };
-        "/roblox-design/" = {
+        "/roblox/" = {
           proxyPass = "http://127.0.0.1:8765";
           extraConfig = ''
             proxy_set_header Host $host;
             proxy_set_header X-Forwarded-Host $host;
             proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
-            proxy_set_header X-Forwarded-Prefix /roblox-design;
+            proxy_set_header Accept-Encoding "";
+            client_max_body_size 18m;
+          '';
+        };
+        "= /roblox-assets" = { return = "308 /roblox/assets/"; extraConfig = "absolute_redirect off;"; };
+        "= /roblox-assets/" = { return = "308 /roblox/assets/"; extraConfig = "absolute_redirect off;"; };
+        "/roblox-assets/" = {
+          proxyPass = "http://127.0.0.1:8766/roblox/assets/";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
+            proxy_set_header Accept-Encoding "";
+            client_max_body_size 18m;
+          '';
+        };
+        "= /roblox-design" = { return = "308 /roblox/design/"; extraConfig = "absolute_redirect off;"; };
+        "= /roblox-design/" = { return = "308 /roblox/design/"; extraConfig = "absolute_redirect off;"; };
+        "/roblox-design/" = {
+          proxyPass = "http://127.0.0.1:8765/roblox/";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
             proxy_set_header Accept-Encoding "";
             client_max_body_size 18m;
           '';

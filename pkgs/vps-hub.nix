@@ -6,7 +6,7 @@ stdenvNoCC.mkDerivation {
   # Keep deployment source tied to a reviewed commit, never a dirty worktree.
   src = builtins.fetchGit {
     url = "file:///home/hjalte/documents/vps-hub";
-    rev = "2b22b243cd97b7939d8ac4ade75b0650adfdd712";
+    rev = "689a92a071244bb32f5c9fff962ed4f5e6c759f3";
   };
 
   installPhase = ''

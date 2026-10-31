@@ -1,10 +1,7 @@
 { stdenvNoCC, python3, nodejs_22, makeWrapper, runCommand, importNpmLock, callPackage }:
 let
   queue = callPackage ./codex-queue.nix {};
-  source = builtins.fetchGit {
-    url = "file:///home/hjalte/documents/roblox-gamemodes";
-    rev = "8c332227b85e499e1316ff3548e33466a5001162";
-  };
+  source = import ./roblox-studio-source.nix;
   toolkitSource = source + "/games/asset_design_lab/experiment/toolkit";
   modules = importNpmLock.buildNodeModules {
     npmRoot = toolkitSource;

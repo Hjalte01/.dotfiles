@@ -22,39 +22,25 @@
       "version_id": "home"
     },
     {
-      "name": "Roblox Design",
-      "repository": "/home/hjalte/documents/roblox-visual-dashboard",
-      "kind": "nixos",
-      "branch": "website/visual-review",
-      "pin": "pkgs/roblox-design-dashboard.nix",
-      "services": [
-        "roblox-design-dashboard.service"
-      ],
-      "health_urls": [
-        "http://127.0.0.1:8080/roblox-design/api/health"
-      ],
-      "refresh": "Update the verified website commit pin, then run nxb through the existing serialized deployment runner.",
-      "note": "Private visual reviews with persistent VPS state. Canonical game source is read-only; Studio/model workers remain separate.",
-      "version_id": "roblox-design",
-      "revision_health_url": "http://127.0.0.1:8765/roblox-design/api/health"
-    },
-    {
-      "name": "Roblox Asset Studio",
+      "name": "Roblox Studio",
       "repository": "/home/hjalte/documents/roblox-gamemodes",
       "kind": "nixos",
       "branch": "main",
-      "pin": "pkgs/roblox-asset-studio.nix",
+      "pin": "pkgs/roblox-studio-source.nix",
       "services": [
+        "roblox-design-dashboard.service",
         "roblox-asset-studio.service",
-        "roblox-asset-worker.service"
+        "roblox-asset-worker.service",
+        "roblox-map-worker.service"
       ],
       "health_urls": [
-        "http://127.0.0.1:8080/roblox-assets/api/health"
+        "http://127.0.0.1:8080/roblox/api/health",
+        "http://127.0.0.1:8080/roblox/assets/api/health"
       ],
-      "refresh": "Pin the verified Asset Studio commit and activate through the serialized VPS deployment runner.",
-      "note": "Private 2D references and serial editable 3D candidates; reviewed reference acceptance queues a candidate, not approval or Roblox publication.",
-      "version_id": "roblox-assets",
-      "revision_health_url": "http://127.0.0.1:8766/roblox-assets/api/health"
+      "refresh": "Update the shared Roblox source revision and activate through the serialized VPS deployment runner.",
+      "note": "Unified Design, Maps and Assets; persistent state and shared serial queue.",
+      "version_id": "roblox-studio",
+      "revision_health_url": "http://127.0.0.1:8765/roblox/api/health"
     },
     {
       "name": "Codex Queue",

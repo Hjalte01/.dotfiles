@@ -27,7 +27,12 @@ in {
       CAPTURE_ROOT = "/var/lib/roblox-design-dashboard/gallery/current";
       DASHBOARD_HOST = "127.0.0.1";
       DASHBOARD_PORT = "8765";
-      DASHBOARD_BASE_PATH = "/roblox-design";
+      DASHBOARD_DISCOVER_GAMES = "1";
+      DASHBOARD_BASE_PATH = "/roblox";
+      ASSET_STUDIO_URL = "http://127.0.0.1:8766/roblox/assets";
+      ROBLOX_ASSET_BUNDLES = "/run/roblox-approved-assets";
+      MAP_STUDIO_WORKER_ROOT = "/var/lib/roblox-asset-studio/jobs/maps";
+      MAP_STUDIO_ARTIFACT_ROOT = "/run/roblox-map-jobs";
       DASHBOARD_ALLOWED_HOSTS = "mobile-dev.tail55f864.ts.net,mobile-dev";
       DASHBOARD_REVISION = dashboard.src.rev;
       GIT_OPTIONAL_LOCKS = "0";
@@ -52,7 +57,12 @@ in {
       ProtectHome = true;
       ProtectSystem = "strict";
       # Preserve the actual Git source identity, mounted read-only despite ProtectHome.
-      BindReadOnlyPaths = [ "/home/hjalte/documents/roblox-gamemodes:${source}" ];
+      BindReadOnlyPaths = [
+        "/home/hjalte/documents/roblox-gamemodes:${source}"
+        "/var/lib/roblox-asset-studio/bundles:/run/roblox-approved-assets"
+        "/var/lib/roblox-asset-studio/jobs/maps:/run/roblox-map-jobs"
+      ];
+      SupplementaryGroups = [ "users" ];
       ProtectKernelTunables = true;
       ProtectControlGroups = true;
       RestrictSUIDSGID = true;
@@ -69,7 +79,7 @@ in {
       import json,time,urllib.request,urllib.error
       for attempt in range(45):
           try:
-              with urllib.request.urlopen("http://127.0.0.1:8765/roblox-design/api/health", timeout=1) as response:
+              with urllib.request.urlopen("http://127.0.0.1:8765/roblox/api/health", timeout=1) as response:
                   state = json.loads(response.read(8192))
               if state.get("ok") is True and state.get("revision") == "${dashboard.src.rev}":
                   break
@@ -80,7 +90,7 @@ in {
           raise SystemExit("Dashboard did not become ready at the expected revision; retrying safely.")
     '';
     workerConfig = pkgs.writeText "roblox-design-worker.json" (builtins.toJSON {
-      games = [ "resonance_lab" ];
+      games = [ "resonance_lab" "era_mining" "alien_evolution" ];
       resources = [ "codex:serial" "source:resonance_lab" ];
       timeoutSeconds = 86400;
       commands.implement = [ "${python}/bin/python3" "-B" "${dashboard}/share/roblox-design-dashboard/website/implementation_adapter.py" ];
@@ -110,7 +120,7 @@ in {
       Group = "users";
       TimeoutStartSec = 90;
       ExecStartPre = "${python}/bin/python3 -B ${readiness}";
-      ExecStart = "${python}/bin/python3 -B ${dashboard}/share/roblox-design-dashboard/website/worker.py --server http://127.0.0.1:8765/roblox-design --config ${workerConfig} --worker-id mobile-dev-design --work-dir /var/lib/roblox-design-worker/jobs";
+      ExecStart = "${python}/bin/python3 -B ${dashboard}/share/roblox-design-dashboard/website/worker.py --server http://127.0.0.1:8765/roblox --config ${workerConfig} --worker-id mobile-dev-design --work-dir /var/lib/roblox-design-worker/jobs";
       StateDirectory = "roblox-design-worker";
       StateDirectoryMode = "0700";
       WorkingDirectory = "/var/lib/roblox-design-worker";

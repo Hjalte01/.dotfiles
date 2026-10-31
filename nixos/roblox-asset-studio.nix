@@ -11,7 +11,7 @@ let
     import json,time,urllib.request,urllib.error
     targets = [
         ("http://127.0.0.1:8787/healthz", "${queue.src.rev}"),
-        ("http://127.0.0.1:8766/roblox-assets/api/health", "${asset.src.rev}"),
+        ("http://127.0.0.1:8766/roblox/assets/api/health", "${asset.src.rev}"),
     ]
     for attempt in range(45):
         ready = True
@@ -34,6 +34,8 @@ in {
     "d ${state} 0700 hjalte users -"
     "d ${state}/jobs 0700 hjalte users -"
     "d ${state}/seed 0700 hjalte users -"
+    "d ${state}/bundles 0750 hjalte users -"
+    "d ${state}/jobs/maps 0750 hjalte users -"
   ];
   systemd.services.roblox-asset-studio = {
     description = "Private Roblox asset reference reviews";
@@ -51,8 +53,9 @@ in {
       StateDirectory = "roblox-asset-studio";
       StateDirectoryMode = "0700";
       WorkingDirectory = state;
+      EnvironmentFile = "-/var/lib/roblox-design-dashboard/worker.env";
       ExecStartPre = "${asset}/bin/roblox-asset-studio --repo ${source} --state ${state} --seed-root ${state}/seed --seed-only";
-      ExecStart = "${asset}/bin/roblox-asset-studio --repo ${source} --state ${state} --host 127.0.0.1 --port 8766 --base-path /roblox-assets";
+      ExecStart = "${asset}/bin/roblox-asset-studio --repo ${source} --state ${state} --host 127.0.0.1 --port 8766 --base-path /roblox/assets";
       Restart = "on-failure";
       RestartSec = 3;
       UMask = "0077";
