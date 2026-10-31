@@ -62,7 +62,8 @@ in {
       ProtectControlGroups = true;
       RestrictSUIDSGID = true;
       RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
-      MemoryMax = "512M";
+      # One GiB assembly budget plus the coordinator and checked RAM reserve.
+      MemoryMax = "1536M";
     };
   };
 }
