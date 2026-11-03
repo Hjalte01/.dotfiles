@@ -163,6 +163,19 @@ in {
           '';
         };
         "= /roblox" = { return = "308 /roblox/"; extraConfig = "absolute_redirect off;"; };
+        "= /roblox/design/boards" = { return = "308 /roblox/design/boards/"; extraConfig = "absolute_redirect off;"; };
+        "/roblox/design/boards/" = {
+          proxyPass = "http://127.0.0.1:8765";
+          proxyWebsockets = true;
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
+            proxy_set_header Accept-Encoding "";
+            client_max_body_size 18m;
+            proxy_read_timeout 300s;
+          '';
+        };
         "= /roblox/assets" = { return = "308 /roblox/assets/"; extraConfig = "absolute_redirect off;"; };
         "/roblox/assets/" = {
           proxyPass = "http://127.0.0.1:8766";
