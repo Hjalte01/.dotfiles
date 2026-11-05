@@ -28,6 +28,7 @@ in stdenvNoCC.mkDerivation {
     test -f website/assets_app.py
     test -f website/asset_worker.py
     python3 -B -m unittest discover -s website/tests -p 'test_asset*.py' -q
+    python3 -B -m unittest discover -s website/tests -p 'test_med_asset_worker.py' -q
     node --check website/asset_static/studio.js
     runHook postCheck
   '';

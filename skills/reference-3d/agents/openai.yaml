@@ -1,4 +1,4 @@
 interface:
   display_name: "Reference 3D"
-  short_description: "Build and compare 3D from shared references"
-  default_prompt: "Use $reference-3d to compare Sol Low and Astra Max geometry from one shared reference set."
+  short_description: "Shared twenty-view Luau mesh workflow"
+  default_prompt: "Use $reference-3d to create a Roblox asset from my reference, normally with the med Sol Ultra tier."

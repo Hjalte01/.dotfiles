@@ -1,0 +1,4 @@
+interface:
+  display_name: "Med 3D"
+  short_description: "Create Luau mesh assets with Sol Ultra"
+  default_prompt: "Use $med-3d to create an editable Roblox asset from my reference using twenty views and Sol Ultra Luau mesh generation."

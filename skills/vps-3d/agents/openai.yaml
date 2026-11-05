@@ -1,0 +1,4 @@
+interface:
+  display_name: "VPS 3D"
+  short_description: "Prepare Luau assets for later Studio finishing"
+  default_prompt: "Use $vps-3d to prepare med-tier reference views and editable Roblox Luau source on the VPS for finishing in Studio on my PC."

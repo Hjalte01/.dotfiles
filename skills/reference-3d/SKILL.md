@@ -1,31 +1,49 @@
 ---
 name: reference-3d
-description: Create editable 3D assets from an approved image and twenty shared views, refine saved models, and compare Sol Low and Astra Max when requested.
+description: Shared twenty-view Luau EditableMesh workflow for the low, med and high Roblox 3D asset skills.
 ---
 
 # Reference to 3D
 
-Choose `low` (default), `max`, or `compare` from the request. Low uses GPT-6.1 Sol with low reasoning for geometry; max uses GPT-6 Astra with max reasoning. Both share a GPT-6.1 Sol low coordinator for the twenty-view stage. Never add an Astra polishing pass unless requested; preserve each initial result.
+Use the **M03-T approach**: an original image plus twenty generated camera views, followed by code-authored Roblox **Luau EditableMesh** geometry. Choose **med** unless the user specifies a tier. This is the user's workflow preference, not a guarantee of a quality or cost ranking.
 
-Choose **create** or **refine** independently of the model mode. Create follows the twenty-view workflow below. For changes to a saved model, or cleanup of completed reference sets, read [Refinement and retention](references/refinement-and-retention.md). Keep the original reference permanently; managed cleanup can release generated angles only after verified completion and when no unfinished consumer needs them. Frozen comparisons retain their assigned inputs.
+| Tier | Geometry author | Reasoning | Entry point |
+| --- | --- | --- | --- |
+| low | `gpt-6.1-sol` | `low` | `$low-3d` |
+| med / mid | `gpt-6.1-sol` | `ultra` | `$med-3d` |
+| high | `gpt-6-astra` | `max` | `$high-3d` |
 
-## Select real workers
+`$max-3d` and legacy core mode `max` mean **high**. For `compare`, run only the tiers requested; a legacy low/max comparison means low/high. Low-poly is a visual style, not a request for the Low reasoning tier. Resolve aliases through the installed skills root (`$CODEX_HOME/skills`, otherwise `~/.codex/skills`); separate declarative links make sibling `../` paths unreliable.
 
-A skill cannot change its caller's model. Explicitly select workers with the available model-selection mechanism: for collaboration use `spawn_agent` with `fork_turns="none"`, `model="gpt-6.1-sol"`, `reasoning_effort="low"`, or `model="gpt-6-astra"`, `reasoning_effort="max"`. This workflow authorizes those model-specific workers, not extra unrelated delegation. Record requested and observed model/effort, execution IDs and raw usage receipts; mark unavailable observations unknown. If selection is unavailable, explain the missing capability before spending generation calls. Never silently use the caller instead. Image generation uses the shared image backend; Sol Low coordinates it, rather than selecting a Sol image model.
+Choose **create** for a new reconstruction or **refine** for a change to a saved model. Refinement and reference cleanup use [refinement and retention](references/refinement-and-retention.md); another twenty-image batch is not automatic. Existing frozen jobs retain their pinned toolchain/model/prompt contracts: changing these skills does not migrate a running queue or rewrite its artifacts. Explicit user/project choices override this default.
 
-## Freeze the shared references
+## Select the actual workers
 
-Use `scripts/reference_set.py` relative to this skill. Paths and output roots are caller supplied, so the same workflow works on the VPS.
+A skill does not switch its caller's model. For geometry, explicitly call `spawn_agent` with `fork_turns="none"`, the table's exact `model` and `reasoning_effort` values. In particular, med requests **`gpt-6.1-sol` with `reasoning_effort="ultra"`**, not medium, max or an inherited setting. Do not add an Astra polishing pass to low or med automatically.
 
-1. Inspect the approved source. `prepare SOURCE --output-root ROOT` creates or resumes a source-hash cache and twenty camera jobs. The original is the identity anchor, not one of the twenty new views.
-2. In the Sol Low worker, use the imagegen skill and built-in image generation to produce each planned view with the original image explicitly referenced each time. Show the same single isolated asset: preserve pose, silhouette, proportions, parts, palette and materials. Change only camera angle. No collages, scenes, redesigned details, programmatic image rotations or duplicated files. Angles are relative to the asset's front: eight azimuths at elevations 0° and 30°, then four at 75°.
-3. Save each exact prompt and generation receipt. `record SET --view view-01 --image IMAGE --prompt PROMPT --receipt RECEIPT` copies them with provenance. Never silently overwrite completed work. Resume missing views; retain rejected attempts outside the registered set. Inspect all twenty individual images, checking identity and contradictions; a contact sheet alone is insufficient. Synthetic unseen surfaces are interpretations, not measured ground truth. Resolve material inconsistencies before sealing.
-4. `seal SET` verifies twenty distinct file hashes and immutable source/provenance and writes the ordered manifest hash. `verify SET` before each geometry arm. Both arms must receive the identical files, order and hashes; never regenerate a second set for max.
+Use a separate **`gpt-6.1-sol` / `low`** coordinator for new reference images in every tier. It coordinates the shared image backend, rather than selecting a Sol image model. Check the requested model-selection and deliverable capabilities before spending generation calls. If the exact model/effort is unavailable, explain the gap and checkpoint without new generation or substitution. For a complete native asset, disclose a missing Studio/bridge before costly new view generation and preserve useful preparation; a source-only request does not need Studio. Do not silently substitute a different geometry method. Record requested settings, available execution/usage receipts and unknown observations honestly.
 
-## Produce actual geometry
+## Reuse or generate the twenty views
 
-Give each arm a fresh selected model context, the original, all twenty individual images, sealed manifest, asset description and the same tools, dimensions, triangle/material budgets and validation criteria. Require inspection of every image. Images are references; the result must be editable geometry authored through code or modeling tools, never a raster render labeled a 3D model. No paid or third-party geometry-generation fallback.
+Use this skill's unchanged `scripts/reference_set.py`; provide source and output paths.
 
-Choose one common toolchain before comparison. A compatible project may provide `games/asset_design_lab/experiment/toolkit`: its Three.js exporter creates GLB/OBJ, checker validates glTF and material-colored rigid meshes, and renderer makes authoring previews. Its static pilot adapter has a 10,000-triangle limit; this is an adapter limit, not a universal game standard. Inspect the local toolkit interface before use. Blender/headless Blender is another option if available; use the same pipeline for both arms. Check device resources and software before placing jobs, honor queue locks and user limits, and stop on exhausted allowance, missing capabilities or repeated failure instead of retrying indefinitely.
+1. Inspect and permanently retain the original. Reuse and `verify SET` an existing sealed set for that exact source hash. Otherwise `prepare SOURCE --output-root ROOT` creates or resumes its twenty camera jobs.
+2. Have the Sol Low coordinator use the imagegen skill and built-in image generation for each missing view, explicitly referencing the original every time. Preserve the asset's identity, pose, proportions, parts, materials and palette; change only the camera. Use eight azimuths at elevations 0° and 30°, then four at 75°. These are twenty individual images, in addition to the original; rotations, duplicate files or a contact sheet do not replace them.
+3. Retain each exact prompt and generation receipt through `record SET --view view-01 --image IMAGE --prompt PROMPT --receipt RECEIPT`. Inspect every individual view for identity and contradictions, resolving material inconsistencies before `seal SET`. Synthetic hidden surfaces remain interpretations.
+4. Run `verify SET` before geometry. For comparisons, give every requested arm identical ordered files/hashes, instructions, tools, dimensions and budgets. Use fresh contexts without earlier candidate geometry or review feedback; preserve first submissions and identify later repairs separately. Do not generate another set for a different tier.
 
-Save separate `low/` and `max/` outputs: editable model and generation source, validated GLB, validation report, dimensions/triangles/material metrics, matching camera renders, worker configuration and raw usage receipts. Keep comparisons fair and distinguish measured usage from account-wide weekly estimates. Renders do not prove Roblox readiness. When requested, create a separate native Studio test place with labeled side-by-side assets, equal presentation and actual Play verification. Preserve authorization boundaries: preparing local files does not authorize asset uploads or publishing a place.
+## Author and execute the Luau mesh
+
+Read [the M03-T execution guide](references/m03t-luau-workflow.md) for the native factory interface, export and checks. For **create**, give the selected author the original, all twenty individual views, manifest and asset brief; require inspection of all twenty-one images. For **refine**, give the original, exact saved source and any retained useful views as described in the retention guide; released angles do not force regeneration for an ordinary edit.
+
+The author produces editable `model.luau` using actual `AssetService:CreateEditableMesh()`, vertices and triangles, with intentional normals, colours and UVs. Prefer one MeshPart for a rigid asset when suitable. Build its silhouette, volumes, attachments and detail from the references; M03-T names the method, not a reusable whale shape. Match dimensions and economical triangle/material budgets to the asset and game. The whale trial's 24 studs / 10,000 triangles are not universal defaults, and a higher reasoning tier does not automatically mean a higher polygon budget.
+
+Run the source in the appropriate Studio through available MCP/native tooling. Preserve project profile leases, other editors and existing safety/ownership rules. For a source-only request, deliver the requested Luau without claiming native verification. If a complete asset is requested but Studio is unavailable, save the source and report native execution/export pending; a script or simulated mesh is not a completed Roblox asset. Do not silently replace this route with Blender, Three.js-authored geometry or a hosted 3D generator.
+
+## Deliver and verify
+
+Keep the original, editable Luau, first source/derivatives, reference associations, actual native metrics and phase receipts. Export validated GLB/OBJ when required through real native mesh readback, or use a verified project-supported bake. A memory-backed EditableMesh preview is not a durable saved asset. Use existing task authorization for uploads; this skill alone does not authorize publishing games or spending money.
+
+Check the actual asset from both sides and useful angles: silhouette, shading, colours, attachments, outward face winding, thin markings and intended openings. Correct a production asset's defects with recorded derivatives; preserve unmodified initial results in a comparison. When Studio integration/review is requested, save the real working place and verify loaded MeshParts in client Play. Keep visual approval distinct from technical success; no FPS or cost claim without measurement.
+
+Report reference generation, inspection/source authoring, native build, export/upload/import and verification separately. Reused views incur no new image generation; their historical generation is shared work. Retain unknown token/cash values instead of estimating from elapsed time. Release generated angles only through the managed lifecycle after verified completion; retain frozen comparisons and unfinished consumers.

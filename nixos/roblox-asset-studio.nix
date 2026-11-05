@@ -74,7 +74,7 @@ in {
     };
   };
   systemd.services.roblox-asset-worker = {
-    description = "Serial Sol Low asset production through Codex Queue";
+    description = "Serial reference and Luau source preparation through Codex Queue";
     wantedBy = [ "multi-user.target" ];
     after = [ "roblox-asset-studio.service" "codex-queue.service" ];
     wants = [ "roblox-asset-studio.service" "codex-queue.service" ];

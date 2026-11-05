@@ -1,0 +1,4 @@
+interface:
+  display_name: "High 3D"
+  short_description: "Create Luau mesh assets with Astra Max"
+  default_prompt: "Use $high-3d to create an editable Roblox asset from my reference using twenty views and Astra Max Luau mesh generation."

@@ -6,11 +6,11 @@ Use the original approved image plus twenty individually generated, inspected an
 
 ## Refine an existing model
 
-Start from the exact selected editable source and its original image, with existing textures, rig, materials and review notes. Record the input revision/hashes and save a new derivative; preserve the selected baseline and frozen experiment evidence. Use the requested model mode explicitly. Low remains Sol Low without an automatic Astra pass.
+Start from the exact selected editable source and its original image, with existing textures, rig, materials and review notes. Record the input revision/hashes and save a new derivative; preserve the selected baseline and frozen experiment evidence. Use the requested tier explicitly: low is Sol Low, med is Sol Ultra (usual default), high is Astra Max; legacy max means high. Do not add an automatic second-model polishing pass.
 
 Change only the requested details while checking identity, silhouette, palette, attachments and intended function. Existing angles may help if retained, but ordinary geometry, texture, rig or animation edits do not require another twenty-image batch. If the saved model cannot support the change and a reconstruction is needed, explain that distinction and use the create workflow. Synthetic angles infer unseen surfaces; the original remains the identity anchor.
 
-Keep editable source, texture masters/maps, a validated export, matching previews, revision/provenance and worker receipts. For textured or skinned assets, use a compatible toolchain and a small native import check before a full build; the static material-colour pilot adapter rejects textures and skinning. Check UVs, weights, deformation seams and native texture loading. Surface maps and rigs are retained production inputs, not disposable camera images.
+For M03-T, keep editable Luau and actual native mesh readback/bake associations. Retain any older Blender/other-format source too; choose a compatible conversion or refinement without silently discarding textures, rigging or the user-selected shape. Keep editable source, texture masters/maps, a validated export, matching previews, revision/provenance and worker receipts. For textured or skinned assets, use a compatible toolchain and a small native import check before a full build; the static material-colour pilot adapter rejects textures and skinning. Check UVs, weights, deformation seams and native texture loading. Surface maps and rigs are retained production inputs, not disposable camera images.
 
 ## Release generated camera images
 
