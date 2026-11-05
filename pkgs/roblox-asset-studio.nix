@@ -31,6 +31,7 @@ in stdenvNoCC.mkDerivation {
     python3 -B -m unittest discover -s website/tests -p 'test_med_asset_worker.py' -q
     python3 -B -m unittest discover -s website/tests -p 'test_source_retention.py' -q
     node --check website/asset_static/studio.js
+    node website/tests/test_asset_bulk_ui.mjs
     runHook postCheck
   '';
   passthru = { inherit toolkit python; };
