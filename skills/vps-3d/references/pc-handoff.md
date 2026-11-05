@@ -17,14 +17,15 @@ Save paths relative to the job root where possible, so copying the whole job pre
   "brief": {"path": "brief.txt", "sha256": "actual SHA-256"},
   "original": {"path": "original.png", "sha256": "actual SHA-256"},
   "references": {
-    "state": "sealed_retained",
+    "state": "historically_sealed_binaries_released",
     "manifestPath": "references/v1-HASH/manifest.json",
     "manifestSha256": "actual SHA-256",
     "helperPath": "actual installed helper path",
     "helperSha256": "actual SHA-256",
     "viewCount": 20,
     "verificationReceiptPath": "reference-verification.json",
-    "consumerState": "pending_pc_native_execution"
+    "binaryRetention": {"status": "released", "originalKept": true, "sourceKept": true, "bytesFreed": null},
+    "consumerState": "source_preparation_complete_native_pending"
   },
   "source": {
     "path": "model.luau",
@@ -71,6 +72,6 @@ Save paths relative to the job root where possible, so copying the whole job pre
 
 Replace all illustrative values with evidence. Observed worker settings must come from actual execution/controller metadata, not the prompt's assertion. Keep available task/run IDs and raw receipt paths; if a receipt is unavailable, record that explicitly and do not invent a file. For reused views, point to their historical receipts and label generation as reused; zero new calls does not imply historical generation was free. `image-inspection.json` contains one path/hash and brief actual observation for each inspected image. A refine handoff records the baseline source revision and references used; it may have fewer than twenty retained views without claiming a newly sealed create set.
 
-An interrupted handoff names the completed phases, missing inputs, last safe checkpoint and next action. Preserve pending references through the controller's consumer registration, with its actual job/consumer identifier and receipt when available. If no registration exists, report `retentionProtection: "manual_preserve_required"` and keep the binaries.
+An interrupted handoff names the completed phases, missing inputs, last safe checkpoint and next action. Preserve reference binaries for unfinished or retryable authoring consumers through the controller's actual registration. After durable source completion, retain metadata and use the managed lifecycle to release binaries without waiting for native PC finishing. Record actual cleanup status and measured bytes; never claim release merely because it was queued. If managed ownership/verification is unavailable, report `retentionProtection: "manual_preserve_required"` and keep the binaries.
 
-`HANDOFF.md` should tell the PC operator where to find the original, source and manifest; which tier/settings actually ran; which static checks passed or were unavailable; and what remains. Include dimensions/orientation and the expected harness contract. The PC should verify copied hashes and the sealed reference set, execute the exact selected source using the shared M03-T native guide, save actual mesh metrics, review useful angles and openings, and verify a durable bake/export. Record native errors and repairs as new revisions. Until that work finishes, retain the pending consumer and all references. No upload or game publication is implied by this handoff.
+`HANDOFF.md` should tell the PC operator where to find the original, source and manifest; which tier/settings actually ran; which static checks passed or were unavailable; and what remains. Include dimensions/orientation and the expected harness contract. The PC should verify copied original/source hashes and historical reference receipts. Verify a live sealed set only if its binaries are explicitly retained; a released set is historical metadata, not a current verifiable image cache. Execute the exact selected source using the shared M03-T native guide, save actual mesh metrics, review useful angles and openings, and verify a durable bake/export. Record native errors and repairs as new revisions. Keep the original, editable source and useful derivatives permanently. The compact bundle omits generated angle binaries after durable VPS preparation; ordinary changes use source and original, while a full reconstruction generates fresh angles. Retain native-completion status separately from reference cleanup. No upload or game publication is implied by this handoff.
