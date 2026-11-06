@@ -30,6 +30,7 @@ in stdenvNoCC.mkDerivation {
     python3 -B -m unittest discover -s website/tests -p 'test_asset*.py' -q
     python3 -B -m unittest discover -s website/tests -p 'test_med_asset_worker.py' -q
     python3 -B -m unittest discover -s website/tests -p 'test_source_retention.py' -q
+    python3 -B -m unittest discover -s website/tests -p 'test_native_intake.py' -q
     node --check website/asset_static/studio.js
     node website/tests/test_asset_bulk_ui.mjs
     runHook postCheck
@@ -44,6 +45,8 @@ in stdenvNoCC.mkDerivation {
     makeWrapper ${python}/bin/python3 "$out/bin/roblox-asset-worker" \
       --add-flags "-B $out/share/roblox-asset-studio/website/asset_worker.py" \
       --prefix PYTHONPATH : "${queue}/${python3.sitePackages}"
+    makeWrapper ${python}/bin/python3 "$out/bin/roblox-asset-native-intake" \
+      --add-flags "-B $out/share/roblox-asset-studio/website/asset_native_intake.py"
     runHook postInstall
   '';
 }
