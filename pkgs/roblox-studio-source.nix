@@ -1,5 +1,5 @@
 # Both Roblox website services use the same verified source revision.
 builtins.fetchGit {
   url = "file:///home/hjalte/documents/roblox-gamemodes";
-  rev = "b51d6b7801ea5ba649a5d6092ba38d66415ddeb4";
+  rev = "4478d5e27d5c3108f6a04dea3c74d17fa49d10c4";
 }
