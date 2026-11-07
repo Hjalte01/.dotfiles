@@ -45,6 +45,7 @@ in {
     environment = {
       PYTHONDONTWRITEBYTECODE = "1";
       PYTHONUNBUFFERED = "1";
+      ASSET_STUDIO_REFERENCE_ONLY = "true";
       ASSET_STUDIO_ALLOWED_HOSTS = "mobile-dev.tail55f864.ts.net,mobile-dev";
       ASSET_STUDIO_REVISION = asset.src.rev;
     };
@@ -74,7 +75,7 @@ in {
     };
   };
   systemd.services.roblox-asset-worker = {
-    description = "Serial reference and Luau source preparation through Codex Queue";
+    description = "Serial 2D reference generation through Codex Queue";
     wantedBy = [ "multi-user.target" ];
     after = [ "roblox-asset-studio.service" "codex-queue.service" ];
     wants = [ "roblox-asset-studio.service" "codex-queue.service" ];
@@ -82,6 +83,7 @@ in {
     environment = {
       PYTHONDONTWRITEBYTECODE = "1";
       PYTHONUNBUFFERED = "1";
+      ASSET_STUDIO_REFERENCE_ONLY = "true";
       PYTHONPATH = "${queue}/${pkgs.python3.sitePackages}";
       CODEX_HOME = "/home/hjalte/.codex";
       CODEX_QUEUE_ASSET_ROOT = "${state}/jobs";
