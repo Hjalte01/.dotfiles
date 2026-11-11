@@ -190,3 +190,9 @@ artifact storage together; use the SQLite online backup API for a live backup,
 not a copy of the database without its WAL. Update the reviewed source pin, run
 `nxb` on mobile-dev under the existing `/var/lib/codex-queue/deployment.lock`, then
 verify both services and `https://mobile-dev.tail55f864.ts.net/roblox-assets/`.
+
+## Roblox Ideas & Trends
+
+The private companion is live at `/roblox-opportunities/`, with durable SQLite
+state, a dedicated boot service and the existing hub app list. See
+[its deployment and recovery record](roblox-opportunities.md).

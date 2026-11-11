@@ -37,6 +37,7 @@ in {
     "${modulesPath}/profiles/qemu-guest.nix"
     ./obsidian-webdav.nix
     ./roblox-design-dashboard.nix
+    ./roblox-opportunities.nix
     ./roblox-asset-studio.nix
     ./roblox-map-worker.nix
   ];
@@ -160,6 +161,21 @@ in {
           extraConfig = ''
             default_type application/json;
             add_header Cache-Control "no-store" always;
+          '';
+        };
+        "= /roblox-opportunities" = { return = "308 /roblox-opportunities/"; extraConfig = "absolute_redirect off;"; };
+        "/roblox-opportunities/" = {
+          # This app uses relative URLs; strip the prefix and preserve the Host
+          # header so same-origin board edits pass its Origin validation.
+          proxyPass = "http://127.0.0.1:8786/";
+          extraConfig = ''
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Proto $vps_hub_forwarded_proto;
+            proxy_set_header Accept-Encoding "";
+            client_max_body_size 12m;
+            proxy_read_timeout 300s;
+            add_header Cache-Control "no-cache" always;
           '';
         };
         "= /roblox" = { return = "308 /roblox/"; extraConfig = "absolute_redirect off;"; };

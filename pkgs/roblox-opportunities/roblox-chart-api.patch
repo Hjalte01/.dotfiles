@@ -1,0 +1,67 @@
+--- a/server.py
++++ b/server.py
+@@ -6,0 +7 @@
++from contextlib import closing
+@@ -15,0 +17,9 @@
++CHART_IDS = {
++    "trending": "top-trending",
++    "playing": "top-playing-now",
++    "up-and-coming": "up-and-coming",
++}
++
++
++def chart_name(sort):
++    return sort.get("sortDisplayName") or sort.get("displayName") or sort.get("name") or ""
+@@ -24,0 +35 @@
++    requested_id = CHART_IDS[label]
+@@ -28 +39,3 @@
+-    sort = next((row for row in sorts if label in str(row.get("displayName", row.get("name", ""))).lower()), None)
++    sort = next((row for row in sorts if row.get("sortId") == requested_id), None)
++    if sort is None:
++        sort = next((row for row in sorts if label in chart_name(row).lower()), None)
+@@ -48 +61,4 @@
+-    return dict(time=datetime.now(timezone.utc).isoformat(), chart=sort.get("displayName") or sort.get("name") or label, games=games)
++    if not games:
++        raise ValueError("Roblox returned no matching experience details")
++    return dict(time=datetime.now(timezone.utc).isoformat(), chart=chart_name(content) or chart_name(sort) or label,
++                chartId=requested_id, appliedFilters=content.get("appliedFilters") or sort.get("appliedFilters"), games=games)
+@@ -75,2 +91,12 @@
+-        if self.path == "/api/board":
+-            with sqlite3.connect(DB) as db:
++        if self.path == "/api/health":
++            try:
++                with closing(sqlite3.connect(DB)) as db, db:
++                    board = db.execute("SELECT revision FROM board WHERE id = 1").fetchone()
++                if board is None:
++                    raise sqlite3.DatabaseError("Board is missing")
++            except sqlite3.Error:
++                self.reply(dict(ok=False, error="Board database is unavailable"), 503)
++                return
++            self.reply(dict(ok=True))
++        elif self.path == "/api/board":
++            with closing(sqlite3.connect(DB)) as db, db:
+@@ -104 +130 @@
+-                with sqlite3.connect(DB) as db:
++                with closing(sqlite3.connect(DB)) as db, db:
+@@ -116 +142 @@
+-                with sqlite3.connect(DB) as db:
++                with closing(sqlite3.connect(DB)) as db, db:
+@@ -134 +160 @@
+-    with sqlite3.connect(DB) as db:
++    with closing(sqlite3.connect(DB)) as db, db:
+--- a/app.js
++++ b/app.js
+@@ -181,0 +182,8 @@
++const chartIdentity = snapshot => snapshot.chartId || ({
++  'top trending': 'top-trending', trending: 'top-trending',
++  'top playing now': 'top-playing-now', playing: 'top-playing-now',
++  'up-and-coming': 'up-and-coming'
++}[snapshot.chart.toLowerCase()] || snapshot.chart);
++// Legacy snapshots have unknown filters; compare them only with other unknown scopes.
++const sameChartScope = (a, b) => chartIdentity(a) === chartIdentity(b) &&
++  (a.appliedFilters || '') === (b.appliedFilters || '');
+@@ -202 +210 @@
+-  const older = snapshots.slice(index+1).find(s => s.chart === snapshot.chart);
++  const older = snapshots.slice(index+1).find(s => sameChartScope(s, snapshot));
+@@ -212,0 +221 @@
++    (snapshot.appliedFilters ? ` · Chart filters: ${snapshot.appliedFilters}` : '') +
