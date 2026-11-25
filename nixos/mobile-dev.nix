@@ -15,6 +15,40 @@
   vpsHub = pkgs.callPackage ../pkgs/vps-hub.nix {};
   robloxDesignDashboard = pkgs.callPackage ../pkgs/roblox-design-dashboard.nix {};
   robloxAssetStudio = pkgs.callPackage ../pkgs/roblox-asset-studio.nix {};
+  # Use the upstream security release until the pinned nixpkgs catches up.
+  tailscaleVersion = "1.104.7";
+  tailscalePackage =
+    if lib.versionAtLeast pkgs.tailscale.version tailscaleVersion
+    then pkgs.tailscale
+    else pkgs.stdenvNoCC.mkDerivation {
+      pname = "tailscale";
+      version = tailscaleVersion;
+      src = pkgs.fetchurl {
+        url = "https://pkgs.tailscale.com/stable/tailscale_${tailscaleVersion}_amd64.tgz";
+        hash = "sha256-5WaT/3SmTyWRt+gZwoBjWhAKrh3fsO8Fj80FK3zY0Ww=";
+      };
+      nativeBuildInputs = [pkgs.installShellFiles pkgs.makeWrapper];
+      dontBuild = true;
+      dontStrip = true;
+      installPhase = ''
+        runHook preInstall
+
+        install -D -m755 -t "$out/bin" tailscale tailscaled
+        wrapProgram "$out/bin/tailscaled" \
+          --prefix PATH : ${lib.makeBinPath (with pkgs; [getent iproute2 iptables shadow])} \
+          --suffix PATH : ${lib.makeBinPath [pkgs.procps]}
+        sed -e "s#/usr/sbin/tailscaled#$out/bin/tailscaled#g" -e '/^EnvironmentFile=/d' \
+          systemd/tailscaled.service > tailscaled.service
+        install -D -m444 tailscaled.service "$out/lib/systemd/system/tailscaled.service"
+        installShellCompletion --cmd tailscale \
+          --bash <("$out/bin/tailscale" completion bash) \
+          --fish <("$out/bin/tailscale" completion fish) \
+          --zsh <("$out/bin/tailscale" completion zsh)
+
+        runHook postInstall
+      '';
+      meta.mainProgram = "tailscale";
+    };
   # Read versions from the exact sources activated alongside these routes.
   hubVersions = pkgs.writeText "vps-hub-versions.json" (builtins.toJSON
     ((lib.mapAttrs (_: app: {
@@ -119,7 +153,10 @@ in {
     };
   };
 
-  services.tailscale.enable = true;
+  services.tailscale = {
+    enable = true;
+    package = tailscalePackage;
+  };
   services.cron.enable = true;
 
   services.nginx = {
@@ -489,7 +526,7 @@ in {
     after = ["tailscaled.service" "network-online.target" "nginx.service"];
     wants = ["network-online.target"];
     requires = ["tailscaled.service" "nginx.service"];
-    path = [pkgs.coreutils pkgs.tailscale];
+    path = [pkgs.coreutils config.services.tailscale.package];
     script = ''
       set +e
       timeout 15s tailscale serve --bg --yes --https=443 http://127.0.0.1:8080
@@ -520,7 +557,6 @@ in {
     cacert
     git
     python3
-    tailscale
     vim
     codexQueue
     gameFactoryGallery
