@@ -56,6 +56,7 @@
       revision = app.src.rev;
     }) {
       home = vpsHub;
+      manga-shelf = vpsHub;
       roblox-studio = robloxDesignDashboard;
       roblox-design = robloxDesignDashboard;
       roblox-assets = robloxAssetStudio;
@@ -70,6 +71,7 @@ in {
   imports = [
     "${modulesPath}/profiles/qemu-guest.nix"
     ./obsidian-webdav.nix
+    ./manga-shelf.nix
     ./roblox-design-dashboard.nix
     ./roblox-opportunities.nix
     ./roblox-asset-studio.nix
