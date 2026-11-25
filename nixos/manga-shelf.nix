@@ -1,7 +1,7 @@
 { pkgs, ... }:
 let
   hub = pkgs.callPackage ../pkgs/vps-hub.nix {};
-  python = "${pkgs.python3}/bin/python3";
+  python = "${pkgs.python3.withPackages (ps: [ps.pillow])}/bin/python3";
   tracker = "${hub}/share/manga-shelf/server.py";
   sharedConfig = {
     User = "manga-shelf";
